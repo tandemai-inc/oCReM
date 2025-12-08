@@ -86,7 +86,14 @@ def calculateScore(m):
     if nMacrocycles > 0:
         macrocyclePenalty = math.log10(2)
 
-    score2 = 0.0 - sizePenalty - stereoPenalty - spiroPenalty - bridgePenalty - macrocyclePenalty
+    score2 = (
+        0.0
+        - sizePenalty
+        - stereoPenalty
+        - spiroPenalty
+        - bridgePenalty
+        - macrocyclePenalty
+    )
 
     # correction for the fingerprint density
     # not in the original publication, added in version 1.1

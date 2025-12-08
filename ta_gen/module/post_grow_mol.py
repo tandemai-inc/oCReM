@@ -8,11 +8,12 @@ import random
 
 from ta_base.common.util import ArgumentParser
 
-from ta_gen.utils.logger import LOGGER
 from ta_gen.tool.crem_runner import CremRunner
 from ta_gen.tool.post_processing import PostProcessor
 from ta_gen.utils.common_utils import read_scaffolds
-from ta_gen.utils.const import MAXINUM_NUM_OF_MOLS_TO_GROW, MAXINUM_NUM_OF_OUTPUT_MOLS
+from ta_gen.utils.const import (MAXINUM_NUM_OF_MOLS_TO_GROW,
+                                MAXINUM_NUM_OF_OUTPUT_MOLS)
+from ta_gen.utils.logger import LOGGER
 from ta_gen.utils.prop_filter import Filter
 
 
@@ -21,9 +22,15 @@ def schema_parser():
     group = parser.add_argument_group("Required arguments")
     group.add_argument("-w", "--work_dir", required=True, help="working directory.")
     group.add_argument(
-        "--result_out", type=str, required=True, help="result file path", default="result.csv"
+        "--result_out",
+        type=str,
+        required=True,
+        help="result file path",
+        default="result.csv",
     )
-    group.add_argument("--scaffolds_file", type=str, required=True, help="scaffold file")
+    group.add_argument(
+        "--scaffolds_file", type=str, required=True, help="scaffold file"
+    )
     group.add_argument("--grow_mol_dir", type=str, required=True)
 
     parser.add_argument("--result_file", default="", help="result file")
@@ -96,7 +103,9 @@ def run_post_grow(args):
             LOGGER.info(
                 f"Sample from out_smis: {len(all_produced_mols)} -> {MAXINUM_NUM_OF_MOLS_TO_GROW}"
             )
-            all_produced_mols = random.sample(all_produced_mols, MAXINUM_NUM_OF_MOLS_TO_GROW)
+            all_produced_mols = random.sample(
+                all_produced_mols, MAXINUM_NUM_OF_MOLS_TO_GROW
+            )
 
         result_dict = {
             "finished": False,

@@ -1,18 +1,19 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 
-from rdkit import Chem
+import ast
 import configparser
-import re
-import pandas as pd
-from pathlib import Path
-from rdkit.Chem import QED, AllChem, Descriptors, rdFreeSASA, rdMolDescriptors
-from ta_gen.utils.const import MAXINUM_NUM_OF_OUTPUT_MOLS
 import functools
 import inspect
+import re
 import traceback
-import  ast
+from pathlib import Path
 
+import pandas as pd
+from rdkit import Chem
+from rdkit.Chem import QED, AllChem, Descriptors, rdFreeSASA, rdMolDescriptors
+
+from ta_gen.utils.const import MAXINUM_NUM_OF_OUTPUT_MOLS
 
 from .sascore import calculateScore
 
@@ -71,6 +72,7 @@ def validate_smiles(smiles: str) -> bool:
             return True
     except Exception:
         return False
+
 
 def get_db_config(config_path="config.ini"):
     config = configparser.ConfigParser()
@@ -188,9 +190,13 @@ def calculate_mol_properties(smiles: str, ionizable_structure_smarts) -> dict:
     formula = rdMolDescriptors.CalcMolFormula(mol)
     qed = QED.qed(mol)
     num_chiral_centers = len(
-        Chem.FindMolChiralCenters(mol, force=True, includeUnassigned=True, includeCIP=True)
+        Chem.FindMolChiralCenters(
+            mol, force=True, includeUnassigned=True, includeCIP=True
+        )
     )
-    num_ionizable_groups = calculate_num_ionizable_groups(mol, ionizable_structure_smarts)
+    num_ionizable_groups = calculate_num_ionizable_groups(
+        mol, ionizable_structure_smarts
+    )
 
     # Return dictionary of calculated properties
     return {
@@ -216,9 +222,12 @@ def get_random_sample_from_df(df, num=MAXINUM_NUM_OF_OUTPUT_MOLS):
         return df
     total_records = len(df)
     if total_records > num:
-        print(f"Num of rows {total_records} > {num}, will return a random sample({num}) of items")
+        print(
+            f"Num of rows {total_records} > {num}, will return a random sample({num}) of items"
+        )
         df = df.sample(n=num)
     return df
+
 
 def load_ionizable_structure_smarts():
     """
@@ -227,8 +236,11 @@ def load_ionizable_structure_smarts():
     Returns:
         list: List of ionizable structure SMARTS strings.
     """
-    df = pd.read_csv(Path(__file__).parents[1] / "data/smarts_rulebook_ph_range.txt", sep=r"\s+")
+    df = pd.read_csv(
+        Path(__file__).parents[1] / "data/smarts_rulebook_ph_range.txt", sep=r"\s+"
+    )
     return df["SMARTS_TSI"]
+
 
 def get_smiles_list_from_csv(csv_file):
     if not os.path.exists(csv_file):
@@ -239,12 +251,14 @@ def get_smiles_list_from_csv(csv_file):
     smi_list = df["smiles"].to_list()
     return smi_list
 
+
 def load_db_query(db_query):
     if db_query:
         db_query = ast.literal_eval(db_query)
     else:
         db_query = {}
     return db_query
+
 
 def read_scaffolds(scaffolds_file: str) -> List[str]:
     """
@@ -267,6 +281,7 @@ def read_scaffolds(scaffolds_file: str) -> List[str]:
         scaffolds.append(scaffold)
     return scaffolds
 
+
 def fault_tolerance(func):
 
     @functools.wraps(func)
@@ -280,10 +295,15 @@ def fault_tolerance(func):
                 bound_args = sig.bind(*args, **kwargs)
                 bound_args.apply_defaults()  # apply default values
                 params_str = ", ".join(
-                    [f"{name}={repr(value)}" for name, value in bound_args.arguments.items()]
+                    [
+                        f"{name}={repr(value)}"
+                        for name, value in bound_args.arguments.items()
+                    ]
                 )
 
-                print(f"Failed run {func.__name__} with input ({params_str})\n{traceback_msg}")
+                print(
+                    f"Failed run {func.__name__} with input ({params_str})\n{traceback_msg}"
+                )
             except Exception:
                 print(f"Failed run {func.__name__} and get inputs.\n{traceback_msg}")
 

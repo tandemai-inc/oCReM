@@ -159,7 +159,9 @@ class RunCommand(object):
         if check_error and line.strip() in check_error:
             self.terminate()
 
-    def get_std(self, tee=False, outfile="", display=True, check_error=None):  # noqa: C901
+    def get_std(
+        self, tee=False, outfile="", display=True, check_error=None
+    ):  # noqa: C901
         """Get stdout when running
 
         Returns:
@@ -188,13 +190,17 @@ class RunCommand(object):
                         line = self.bytes_decode(line)
                         if line:
                             line_exists = True
-                            self.process_stdout(line, stdout_list, display, outfile, check_error)
+                            self.process_stdout(
+                                line, stdout_list, display, outfile, check_error
+                            )
                     elif stream == stderr:
                         line = stderr.readline()
                         line = self.bytes_decode(line)
                         if line:
                             line_exists = True
-                            self.process_stderr(line, stderr_list, display, outfile, check_error)
+                            self.process_stderr(
+                                line, stderr_list, display, outfile, check_error
+                            )
 
                 if not line_exists:
                     break

@@ -10,21 +10,17 @@ import pandas as pd
 from rdkit import Chem, RDLogger
 from rdkit.Chem import Descriptors
 
-from ta_gen.utils.logger import LOGGER
-from ta_gen.utils.common_utils import (
-    calculate_mol_properties,
-    get_random_sample_from_df,
-    load_ionizable_structure_smarts,
-)
+from ta_gen.utils.common_utils import (calculate_mol_properties,
+                                       get_random_sample_from_df,
+                                       load_ionizable_structure_smarts)
 from ta_gen.utils.const import DISPLAY_ORDER
+from ta_gen.utils.logger import LOGGER
 from ta_gen.utils.prop_filter import Filter
 from ta_gen.utils.rgroup_identification import identify_rgroups
-from ta_gen.utils.structural_alerts import (
-    generate_tafilter_id_by_count,
-    get_scaffold_pattern_count,
-    get_sdf_tafilter_id,
-    get_side_chain_pattern_count,
-)
+from ta_gen.utils.structural_alerts import (generate_tafilter_id_by_count,
+                                            get_scaffold_pattern_count,
+                                            get_sdf_tafilter_id,
+                                            get_side_chain_pattern_count)
 
 RDLogger.DisableLog("rdApp.*")
 CHUNK_SIZE = 500000
@@ -37,7 +33,11 @@ def chunkify(lst, n):
 
 
 def _get_properties_and_tafilter_id(
-    smi, cnt_scaffold_pattern, cnt_side_chain_pattern, ignore_tf_alerts, ionizable_structure_smarts
+    smi,
+    cnt_scaffold_pattern,
+    cnt_side_chain_pattern,
+    ignore_tf_alerts,
+    ionizable_structure_smarts,
 ):
     mol_properties = {"smiles": smi}
     mol_properties.update(calculate_mol_properties(smi, ionizable_structure_smarts))
@@ -136,7 +136,9 @@ class PostProcessor(object):
 
         column_order = DISPLAY_ORDER[tool_name]
 
-        result_df = PostProcessor.initialize_result_df(result_data, column_order, result_file)
+        result_df = PostProcessor.initialize_result_df(
+            result_data, column_order, result_file
+        )
         if result_df is None:
             return
 
@@ -263,10 +265,14 @@ class PostProcessor(object):
         LOGGER.info("Start calculating properties on chunks")
         with Pool(num_cpus) as pool:
             properties_list = list(
-                pool.map(PostProcessor.get_new_core_data, core_smi_list, chunksize=chunk_size)
+                pool.map(
+                    PostProcessor.get_new_core_data, core_smi_list, chunksize=chunk_size
+                )
             )
             properties_df = pd.DataFrame(properties_list)
-        result_df = result_df.merge(properties_df, on="core", suffixes=("", "_new"), how="left")
+        result_df = result_df.merge(
+            properties_df, on="core", suffixes=("", "_new"), how="left"
+        )
         return result_df
 
     @staticmethod

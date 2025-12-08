@@ -5,11 +5,11 @@ import re
 
 from rdkit import Chem
 
-from ta_gen.utils.logger import LOGGER
 from ta_gen.tool.crem import grow_mol2, update_db_config
 from ta_gen.tool.rgroup_enumeration_tool import RGroupEnumerationTool
 from ta_gen.utils.common_utils import standardize_smiles, validate_smiles
 from ta_gen.utils.const import MAXINUM_NUM_OF_OUTPUT_MOLS
+from ta_gen.utils.logger import LOGGER
 
 
 class CremRunner(RGroupEnumerationTool):
@@ -123,7 +123,9 @@ class CremRunner(RGroupEnumerationTool):
                 atom.SetAtomMapNum(0)
 
     def prepare(self):
-        scaffold, matches = self.format_attachment_point_nums_in_scaffold_str(self.scaffold)
+        scaffold, matches = self.format_attachment_point_nums_in_scaffold_str(
+            self.scaffold
+        )
 
         mol = Chem.MolFromSmiles(standardize_smiles(scaffold))
 

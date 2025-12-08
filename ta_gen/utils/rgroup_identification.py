@@ -24,9 +24,13 @@ def update_attachment_point_indexes(scaffolds):
         # match.group(0) -> whole matched string -> [*:0]
         # match.group(1) -> first sub group -> (\d+) -> 0
         new_s = re.sub(
-            pattern, lambda match: replacement.format(new_idx=int(match.group(1)) + 1), s
+            pattern,
+            lambda match: replacement.format(new_idx=int(match.group(1)) + 1),
+            s,
         )
-        new_s = new_s.replace("\\", "").replace("/", "")  # remove directionality of chemical bonds
+        new_s = new_s.replace("\\", "").replace(
+            "/", ""
+        )  # remove directionality of chemical bonds
 
         mol = Chem.MolFromSmiles(new_s)
         rm = []
@@ -108,7 +112,9 @@ def identify_rgroups(
     scaffolds = update_attachment_point_indexes(scaffolds)  # scaffold start from 1
 
     # convert smiles string to mol object and store in a list
-    mols = [Chem.MolFromSmiles(smi.replace("\\", "").replace("/", "")) for smi in smi_list]
+    mols = [
+        Chem.MolFromSmiles(smi.replace("\\", "").replace("/", "")) for smi in smi_list
+    ]
     # add hydrogens to all molecules
     mols = [Chem.AddHs(m, addCoords=True) for m in mols]
 

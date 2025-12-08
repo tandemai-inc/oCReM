@@ -4,21 +4,24 @@
 import json
 import os
 
-
 from ta_base.common.util import ArgumentParser
 from ta_base.exception.ta_module_exception import TAModuleException
 
-from ta_gen.utils.logger import LOGGER
 from ta_gen.tool.crem_runner import CremRunner
 from ta_gen.utils.common_utils import load_db_query, read_scaffolds
+from ta_gen.utils.logger import LOGGER
 
 
 def schema_parser():
     parser = ArgumentParser(conflict_handler="resolve", add_help=False)
     group = parser.add_argument_group("Required arguments")
     group.add_argument("-w", "--work_dir", required=True, help="working directory.")
-    group.add_argument("--task_index", type=int, required=True, help="index number of task")
-    group.add_argument("--scaffolds_file", type=str, required=True, help="scaffold file")
+    group.add_argument(
+        "--task_index", type=int, required=True, help="index number of task"
+    )
+    group.add_argument(
+        "--scaffolds_file", type=str, required=True, help="scaffold file"
+    )
     group.add_argument("--smarts_file", required=True, type=str)
     group.add_argument("--protect_id", required=True, type=int)
     group.add_argument("--max_replacements", required=True, type=int)

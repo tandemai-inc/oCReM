@@ -1,17 +1,19 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 
-from src.utils.cmd import cmd
-import pathlib
-from src.utils.common_utils import dict_to_cmdline
 import argparse
-import yaml
-import pickle
 import os
+import pathlib
+import pickle
 
-from src.utils.const import MAXINUM_NUM_OF_MOLS_TO_GROW, MAXINUM_NUM_OF_OUTPUT_MOLS
+import yaml
+from src.utils.cmd import cmd
+from src.utils.common_utils import dict_to_cmdline
+from src.utils.const import (MAXINUM_NUM_OF_MOLS_TO_GROW,
+                             MAXINUM_NUM_OF_OUTPUT_MOLS)
 
 MODULE_PATH = pathlib.Path(__file__).parents[1] / "module"
+
 
 def parse_args():  # pragma: no cover
     parser = argparse.ArgumentParser(
@@ -52,7 +54,9 @@ def init_grow(paras):
         "run_ta_prop": run_ta_prop,
         "num_cpus": paras["parameter"]["master"]["num_cpus"],
         "max_mols_gen": paras["parameter"]["master"]["max_mols_gen"],
-        "user_provided_output_file": paras["parameter"]["master"]["user_provided_output_file"],
+        "user_provided_output_file": paras["parameter"]["master"][
+            "user_provided_output_file"
+        ],
     }
     paras.update(paras["parameter"]["crem"])
     if run_ta_prop:
@@ -62,7 +66,9 @@ def init_grow(paras):
         f"python {MODULE_PATH}/init_grow.py {dict_to_cmdline(paras)}"
     )
     if return_code != 0:
-        raise Exception(f"init_grow failed, return code: {return_code}, stdout: {stdout}, stderr: {stderr}")
+        raise Exception(
+            f"init_grow failed, return code: {return_code}, stdout: {stdout}, stderr: {stderr}"
+        )
 
     with open(result_file, "rb") as f:
         result_dict = pickle.load(f)
@@ -116,7 +122,8 @@ def grow_mol(pre_grow_result, index, paras):
     )
     if return_code != 0:
         raise Exception(
-            f"grow mol failed, return code: {return_code}, stdout: {stdout}, stderr: {stderr}")
+            f"grow mol failed, return code: {return_code}, stdout: {stdout}, stderr: {stderr}"
+        )
 
     with open(result_file, "rb") as f:
         result_dict = pickle.load(f)
@@ -154,7 +161,8 @@ def post_grow_mol(grow_result, index, paras, protect_id):
     )
     if return_code != 0:
         raise Exception(
-            f"init_grow failed, return code: {return_code}, stdout: {stdout}, stderr: {stderr}")
+            f"init_grow failed, return code: {return_code}, stdout: {stdout}, stderr: {stderr}"
+        )
 
     with open(result_file, "rb") as f:
         result_dict = pickle.load(f)
@@ -172,7 +180,9 @@ def main(paras):
         if crem_rg_next_iter:
             protect_id = pre_grow_result["protect_id"]
             grow_result = grow_mol(pre_grow_result, index, paras)
-            crem_rg_finished, crem_rg_next_iter, pre_grow_result = post_grow_mol(grow_result, index, paras, protect_id)
+            crem_rg_finished, crem_rg_next_iter, pre_grow_result = post_grow_mol(
+                grow_result, index, paras, protect_id
+            )
             index += 1
         yield False
 

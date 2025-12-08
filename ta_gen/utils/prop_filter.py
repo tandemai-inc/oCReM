@@ -8,7 +8,8 @@ from multiprocessing import Pool, cpu_count
 
 import numpy as np
 from rdkit import Chem
-from rdkit.Chem.Descriptors import TPSA, MolLogP, MolWt, NumHAcceptors, NumHDonors
+from rdkit.Chem.Descriptors import (TPSA, MolLogP, MolWt, NumHAcceptors,
+                                    NumHDonors)
 from rdkit.Chem.rdMolDescriptors import CalcNumRotatableBonds
 
 from ta_gen.tool.property_utils import GetNumHeavyAtoms
@@ -64,7 +65,9 @@ class Filter(object):
         pool = Pool(threads)
         ret = []
         for _, smi in enumerate(df["smiles"]):
-            ret.append(pool.apply_async(self._compute_mol_properties, (smi, properties)))
+            ret.append(
+                pool.apply_async(self._compute_mol_properties, (smi, properties))
+            )
         pool.close()
         pool.join()
 
@@ -130,7 +133,9 @@ class Filter(object):
             "Rot": (kwargs.get("rot_min", 0), kwargs.get("rot_max", 10)),
         }
 
-        filtered_df = self.filter_by_properties(df, criteria_boundary, num_of_violations)
+        filtered_df = self.filter_by_properties(
+            df, criteria_boundary, num_of_violations
+        )
         print(f"Library size after filtering: {filtered_df.shape[0]}")
         return filtered_df
 
@@ -155,14 +160,24 @@ class Filter(object):
         group_filter.add_argument(
             "--hbd-max", type=float, default=5, help="Max number of hydrogen bond donor"
         )
-        group_filter.add_argument("--mw-min", type=float, default=0, help="Min molecular weight")
-        group_filter.add_argument("--mw-max", type=float, default=500, help="Max molecular weight")
+        group_filter.add_argument(
+            "--mw-min", type=float, default=0, help="Min molecular weight"
+        )
+        group_filter.add_argument(
+            "--mw-max", type=float, default=500, help="Max molecular weight"
+        )
         group_filter.add_argument("--logP-min", type=float, default=-5, help="Min logP")
         group_filter.add_argument("--logP-max", type=float, default=5, help="Max logP")
         group_filter.add_argument("--tpsa-min", type=float, default=0, help="Min TPSA")
-        group_filter.add_argument("--tpsa-max", type=float, default=200, help="Max TPSA")
-        group_filter.add_argument("--rot-min", type=float, default=0, help="Min rotatable bonds")
-        group_filter.add_argument("--rot-max", type=float, default=10, help="Max rotatable bonds")
+        group_filter.add_argument(
+            "--tpsa-max", type=float, default=200, help="Max TPSA"
+        )
+        group_filter.add_argument(
+            "--rot-min", type=float, default=0, help="Min rotatable bonds"
+        )
+        group_filter.add_argument(
+            "--rot-max", type=float, default=10, help="Max rotatable bonds"
+        )
         group_filter.add_argument(
             "--num_of_violations", type=int, default=0, help="Number of violations"
         )
@@ -193,7 +208,9 @@ class PreFilter(object):
         mol = Chem.MolFromSmiles(smi)
         scaffold = Chem.MolFromSmiles(scaffold)
         if mol:
-            return tuple(PreFilter.criteria_method[col](mol, scaffold) for col in properties)
+            return tuple(
+                PreFilter.criteria_method[col](mol, scaffold) for col in properties
+            )
         else:
             return (-999,) * len(properties)
 
@@ -213,7 +230,9 @@ class PreFilter(object):
 
         """
         reagent = Chem.MolFromSmiles(reagent_smi)
-        leaving_group_pattern = Chem.MolFromSmarts(reagent_order["reagent_leaving_group"])
+        leaving_group_pattern = Chem.MolFromSmarts(
+            reagent_order["reagent_leaving_group"]
+        )
         reagent_mw = MolWt(Chem.DeleteSubstructs(reagent, leaving_group_pattern))
 
         return reagent_mw + scaffold_mw
@@ -233,8 +252,12 @@ class PreFilter(object):
 
         """
         reagent = Chem.MolFromSmiles(reagent_smi)
-        leaving_group_pattern = Chem.MolFromSmarts(reagent_order["reagent_leaving_group"])
-        reagent_hac = GetNumHeavyAtoms(Chem.DeleteSubstructs(reagent, leaving_group_pattern))
+        leaving_group_pattern = Chem.MolFromSmarts(
+            reagent_order["reagent_leaving_group"]
+        )
+        reagent_hac = GetNumHeavyAtoms(
+            Chem.DeleteSubstructs(reagent, leaving_group_pattern)
+        )
 
         return reagent_hac + scaffold_hac
 
@@ -243,19 +266,27 @@ class PreFilter(object):
         with Pool(threads) as pool:
             if "MW" in properties:
                 scaffold = Chem.MolFromSmiles(reagent_order["scaffold"])
-                leaving_group_pattern = Chem.MolFromSmarts(reagent_order["scaffold_leaving_group"])
-                scaffold_mw = MolWt(Chem.DeleteSubstructs(scaffold, leaving_group_pattern))
+                leaving_group_pattern = Chem.MolFromSmarts(
+                    reagent_order["scaffold_leaving_group"]
+                )
+                scaffold_mw = MolWt(
+                    Chem.DeleteSubstructs(scaffold, leaving_group_pattern)
+                )
                 ret = []
                 for _, smi in enumerate(df["smiles"]):
                     ret.append(
-                        pool.apply_async(self.get_MW_prefilter, (smi, reagent_order, scaffold_mw))
+                        pool.apply_async(
+                            self.get_MW_prefilter, (smi, reagent_order, scaffold_mw)
+                        )
                     )
                 df["MW"] = np.asarray([x.get() for x in ret])
                 properties.remove("MW")
 
             if "HAC" in properties:
                 scaffold = Chem.MolFromSmiles(reagent_order["scaffold"])
-                leaving_group_pattern = Chem.MolFromSmarts(reagent_order["scaffold_leaving_group"])
+                leaving_group_pattern = Chem.MolFromSmarts(
+                    reagent_order["scaffold_leaving_group"]
+                )
                 scaffold_hac = GetNumHeavyAtoms(
                     Chem.DeleteSubstructs(scaffold, leaving_group_pattern)
                 )

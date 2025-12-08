@@ -29,4 +29,3 @@ DISPLAY_ORDER = {
         "numIonizableGroups",
     ],
 }
-

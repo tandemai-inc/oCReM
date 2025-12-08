@@ -47,13 +47,17 @@ def __extend_output_by_equivalent_atoms(mol, output):
         ):  # if all atoms of a fragment have equivalent atoms
             smi = patt_remove_map.sub("", item[1])
             smi = patt_remove_brackets.sub("", smi)
-            ids_list = [set(i) for i in mol.GetSubstructMatches(Chem.MolFromSmarts(smi))]
+            ids_list = [
+                set(i) for i in mol.GetSubstructMatches(Chem.MolFromSmarts(smi))
+            ]
             for ids_matched in ids_list:
                 for ids_eq in product(
                     *(atom_eq[i] for i in item[2])
                 ):  # enumerate all combinations of equivalent atoms
                     if ids_matched == set(ids_eq):
-                        extended_output.append((item[0], item[1], tuple(sorted(ids_eq))))
+                        extended_output.append(
+                            (item[0], item[1], tuple(sorted(ids_eq)))
+                        )
     return extended_output
 
 
@@ -66,7 +70,12 @@ def get_atom_prop(molecule, prop="Index"):
 
 
 def __fragment_mol(  # noqa: C901
-    mol, radius=3, return_ids=True, keep_stereo=False, protected_ids=None, symmetry_fixes=False
+    mol,
+    radius=3,
+    return_ids=True,
+    keep_stereo=False,
+    protected_ids=None,
+    symmetry_fixes=False,
 ):
     if protected_ids:
         return_ids = True
@@ -186,12 +195,18 @@ def update_protected_ids(mol, protected_ids, replace_ids):
         ids = set()
         for i in replace_ids:
             ids.update(
-                a.GetIdx() for a in mol.GetAtomWithIdx(i).GetNeighbors() if a.GetAtomicNum() == 1
+                a.GetIdx()
+                for a in mol.GetAtomWithIdx(i).GetNeighbors()
+                if a.GetAtomicNum() == 1
             )
         ids = (
-            set(a.GetIdx() for a in mol.GetAtoms()).difference(ids).difference(replace_ids)
+            set(a.GetIdx() for a in mol.GetAtoms())
+            .difference(ids)
+            .difference(replace_ids)
         )  # ids which should be protected
-        protected_ids.update(ids)  # since protected_ids has a higher priority add them anyway
+        protected_ids.update(
+            ids
+        )  # since protected_ids has a higher priority add them anyway
 
     protected_ids = sorted(protected_ids)
     return protected_ids
@@ -511,7 +526,9 @@ def mutate_mol_ch(
                 labels = []
                 for k, v in dummy_idx_bond_idx_map.items():
                     cut_bonds.append(
-                        mol.GetBondBetweenAtoms(core_match[v[0]], core_match[v[1]]).GetIdx()
+                        mol.GetBondBetweenAtoms(
+                            core_match[v[0]], core_match[v[1]]
+                        ).GetIdx()
                     )
                     labels.append((k, k))
                 frag_mol = Chem.FragmentOnBonds(
@@ -575,7 +592,9 @@ def grow_mol(
                     for a in mol.GetAtomWithIdx(i).GetNeighbors()
                     if a.GetAtomicNum() == 1
                 )
-        ids = set(a.GetIdx() for a in mol.GetAtoms() if a.GetAtomicNum() == 1).difference(
+        ids = set(
+            a.GetIdx() for a in mol.GetAtoms() if a.GetAtomicNum() == 1
+        ).difference(
             ids
         )  # ids of Hs to protect
         protected_ids.update(ids)  # Hs should be protected

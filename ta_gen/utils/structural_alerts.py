@@ -41,7 +41,9 @@ def generate_tafilter_id(smiles: str, scaffold: str = None) -> List:
 
     if scaffold:
         # remove [*:d], [*]
-        scaffold = re.sub(r"\[\*:(\d+)\]", "", scaffold).replace("[*]", "").replace("()", "")
+        scaffold = (
+            re.sub(r"\[\*:(\d+)\]", "", scaffold).replace("[*]", "").replace("()", "")
+        )
         scaffold_smart = Chem.MolFromSmarts(standardize_smiles(scaffold))
         mapping = mol.GetSubstructMatches(scaffold_smart)
         scaffold_matches = set()
@@ -53,7 +55,9 @@ def generate_tafilter_id(smiles: str, scaffold: str = None) -> List:
     for rule_id, pattern, max_val in rules_list:
         structure_matches = mol.GetSubstructMatches(pattern)
         if scaffold:
-            structure_matches = [t for t in structure_matches if not set(t) <= scaffold_matches]
+            structure_matches = [
+                t for t in structure_matches if not set(t) <= scaffold_matches
+            ]
         if len(structure_matches) > max_val:
             tafilter_id.append(rule_id)
     return tafilter_id
@@ -62,7 +66,11 @@ def generate_tafilter_id(smiles: str, scaffold: str = None) -> List:
 def get_scaffold_pattern_count(scaffold: str = None):
     cnt = Counter()
     if scaffold:
-        scaffold = re.sub(r"\[\*:(\d+)\]", "[H]", scaffold).replace("[*]", "[H]").replace("()", "")
+        scaffold = (
+            re.sub(r"\[\*:(\d+)\]", "[H]", scaffold)
+            .replace("[*]", "[H]")
+            .replace("()", "")
+        )
         scaffold_mol = Chem.MolFromSmiles(standardize_smiles(scaffold))
         for rule_id, pattern, _ in rules_list:
             match_cnt = len(scaffold_mol.GetSubstructMatches(pattern))
