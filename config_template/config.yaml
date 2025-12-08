@@ -1,0 +1,38 @@
+{
+    "parameter": {
+        "master": {
+            "tool": "crem",                     # enum ["crem", "post-process"]
+            "scaffolds_file": "",               # scaffold smiles file
+            "result_out": "result.csv",
+            "run_ta_prop": false,
+            # multi-processing setting
+            "num_cpus": 16,
+            "max_mols_gen": 50000,              # maximum number of molecules to output
+                                                # -1: no limit  
+            "user_provided_output_file": "",    # if tool is set to 'post-process', the 'user_provided_output_file' file should be provided as well. 
+                                                # will skip enumeration and only run post process on the user provided mol list. 
+        },
+        "crem": {
+            "database": "",                     # sqlite database to be used for generating the library
+            "db_config": "",                    # ini config file for postgres db
+            "radius": 3,                        # radius of context which will be considered for replacement
+            "min_atoms": 1,                     # minimum number of atoms in the fragment which will replace H
+            "max_atoms": 2,                     # maximum number of atoms in the fragment which will replace H
+        },
+        "ta_prop": {
+            "hba-min": 0,                       # Min number of hydrogen bond acceptor
+            "hba-max": 10,                      # Max number of hydrogen bond acceptor
+            "hbd-min": 0,                       # Min number of hydrogen bond donor
+            "hbd-max": 5,                       # Max number of hydrogen bond donor
+            "mw-min": 0,                        # Min molecular weight
+            "mw-max": 500,                      # Max molecular weight
+            "logP-min": -5,                     # Min logP
+            "logP-max": 5,                      # Max logP
+            "tpsa-min": 0,                      # Min TPSA
+            "tpsa-max": 200,                    # Max TPSA
+            "rot-min": 0,                       # Min rotatable bonds
+            "rot-max": 10,                      # Max rotatable bonds
+            "num_of_violations": 0,             # Number of violations
+        },
+    }
+}
