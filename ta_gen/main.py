@@ -126,8 +126,9 @@ def grow_mol(pre_grow_result, index, paras):
         }
         _paras.update(paras["parameter"]["crem"])
 
+        log_path = f"{work_dir}/{task_id}.log"
         return_code, stdout, stderr = cmd(
-            f"python {MODULE_PATH}/grow_mol.py {dict_to_cmdline(_paras)}"
+            f"python {MODULE_PATH}/grow_mol.py {dict_to_cmdline(_paras)} > {log_path}"
         )
         if return_code != 0:
             raise Exception(
