@@ -1,0 +1,12 @@
+name: crem
+channels:
+  - pytorch
+  - conda-forge
+dependencies:
+  - python=3.10
+  - psycopg2
+  - tqdm
+  - pandas
+  - sqlite
+  - pyyaml
+  - rdkit=2024.03.5
