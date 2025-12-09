@@ -33,7 +33,7 @@ conda env create -f environment.yml
 
 ### Create config file
 
-The template is under ta_gen/config.yml. Set the db_config to frag.ini.
+The template is under config_template/config.yml. Set the parameter-crem-db_config to db.ini.
 
 ### Run
 ```bash
