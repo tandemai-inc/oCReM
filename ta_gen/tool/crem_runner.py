@@ -29,7 +29,7 @@ class CremRunner(RGroupEnumerationTool):
 
     def __init__(self, scaffold: str, db_config: str, db_engine: str, **kwargs):
         super().__init__(scaffold=scaffold)
-        self.db_config = update_db_config(db_config)
+        self.db_config = update_db_config(db_engine, db_config)
         self.radius = kwargs.get("radius", 3)
         self.min_atoms = kwargs.get("min_atoms", 1)
         self.max_atoms = kwargs.get("max_atoms", 2)

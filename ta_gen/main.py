@@ -42,6 +42,14 @@ def read_config(config_file):
         raise Exception("Cannot read options from config file %s." % config_file)
 
 
+def init(paras):
+    db_path = paras["db_path"]
+    db_config = paras["db_config"]
+    if db_config:
+        paras["db_engine"] = "postgres"
+    elif db_path:
+        paras["db_engine"] = "sqlite"
+
 def init_grow(paras):
     work_dir = "./scr/init_grow"
     result_file = f"./scr/init_grow/init_grow.pkl"
@@ -174,7 +182,7 @@ def post_grow_mol(index, paras, protect_id):
 
 
 def main(paras):
-    init()
+    init(paras["parameter"]["crem"])
     print("Create Crem RGroup Enumeration tasks")
     crem_rg_finished, crem_rg_next_iter, pre_grow_result = init_grow(paras)
     index = 1
