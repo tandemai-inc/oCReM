@@ -182,7 +182,7 @@ class CremRunner(RGroupEnumerationTool):
         """
         group_crem = parser.add_argument_group("crem options")
         group_crem.add_argument("--db_config", type=str, required=True)
-        group_crem.add_argument("--db_engine", type=str, default="sqlite")
+        group_crem.add_argument("--db_engine", type=str, default="postgres")
         group_crem.add_argument("--radius", type=int, default=3)
         group_crem.add_argument("--min_atoms", type=int, default=1)
         group_crem.add_argument("--max_atoms", type=int, default=2)

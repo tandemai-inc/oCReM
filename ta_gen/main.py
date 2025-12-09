@@ -43,12 +43,12 @@ def read_config(config_file):
 
 
 def init(paras):
-    db_path = paras.get("db_path", None)
     db_config = paras.get("db_config", None)
     if db_config:
         paras["db_engine"] = "postgres"
-    elif db_path:
-        paras["db_engine"] = "sqlite"
+    else:
+        raise Exception("db_config is required.")
+
 
 def init_grow(paras):
     work_dir = "./scr/init_grow"
@@ -128,7 +128,7 @@ def grow_mol(pre_grow_result, index, paras):
 
         log_path = f"{work_dir}/{task_id}.log"
         return_code, stdout, stderr = cmd(
-            f"python {MODULE_PATH}/grow_mol.py {dict_to_cmdline(_paras)} > {log_path}"
+            f"python {MODULE_PATH}/grow_mol.py {dict_to_cmdline(_paras)} &> {log_path}"
         )
         if return_code != 0:
             raise Exception(

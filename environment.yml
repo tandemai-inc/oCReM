@@ -7,7 +7,6 @@ dependencies:
   - psycopg2
   - tqdm
   - pandas
-  - sqlite
   - pyyaml
   - rdkit=2024.03.5
   - pip

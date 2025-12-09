@@ -2,7 +2,6 @@
 
 import random
 import re
-import sqlite3
 from collections import defaultdict
 from copy import deepcopy
 from itertools import product
@@ -352,18 +351,6 @@ def get_core_smi_replacements(
             dist,
             min_atoms,
             max_atoms,
-        )
-    elif engine == "sqlite":
-        db_path = db_config["path"]
-        sql_conn = sqlite3.connect(db_path)
-        cur = sql_conn.cursor()
-        row_ids = __get_replacements_rowids_sqlite(
-            cur,
-            env_smarts,
-            dist,
-            min_atoms,
-            max_atoms,
-            radius,
         )
     else:
         raise ValueError(f"Unsupported database engine: {engine}")
