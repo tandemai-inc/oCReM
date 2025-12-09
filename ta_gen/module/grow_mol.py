@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
+import argparse
 import json
 import os
-
-from ta_base.common.util import ArgumentParser
-from ta_base.exception.ta_module_exception import TAModuleException
 
 from ta_gen.tool.crem_runner import CremRunner
 from ta_gen.utils.common_utils import load_db_query, read_scaffolds
@@ -13,7 +11,7 @@ from ta_gen.utils.logger import LOGGER
 
 
 def schema_parser():
-    parser = ArgumentParser(conflict_handler="resolve", add_help=False)
+    parser = argparse.ArgumentParser(conflict_handler="resolve", add_help=False)
     group = parser.add_argument_group("Required arguments")
     group.add_argument("-w", "--work_dir", required=True, help="working directory.")
     group.add_argument(

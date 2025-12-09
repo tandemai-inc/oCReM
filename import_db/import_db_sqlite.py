@@ -178,7 +178,6 @@ def verify_import(db_file):
     conn.close()
 
 
-
 def schema_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("-D", "--db_file", type=str, default="gen_chembl.db")

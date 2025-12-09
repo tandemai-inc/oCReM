@@ -10,21 +10,17 @@ import pandas as pd
 from rdkit import Chem, RDLogger
 from rdkit.Chem import Descriptors
 
-from ta_gen.utils.common_utils import (
-    calculate_mol_properties,
-    get_random_sample_from_df,
-    load_ionizable_structure_smarts,
-)
+from ta_gen.utils.common_utils import (calculate_mol_properties,
+                                       get_random_sample_from_df,
+                                       load_ionizable_structure_smarts)
 from ta_gen.utils.const import DISPLAY_ORDER
 from ta_gen.utils.logger import LOGGER
 from ta_gen.utils.prop_filter import Filter
 from ta_gen.utils.rgroup_identification import identify_rgroups
-from ta_gen.utils.structural_alerts import (
-    generate_tafilter_id_by_count,
-    get_scaffold_pattern_count,
-    get_sdf_tafilter_id,
-    get_side_chain_pattern_count,
-)
+from ta_gen.utils.structural_alerts import (generate_tafilter_id_by_count,
+                                            get_scaffold_pattern_count,
+                                            get_sdf_tafilter_id,
+                                            get_side_chain_pattern_count)
 
 RDLogger.DisableLog("rdApp.*")
 CHUNK_SIZE = 500000

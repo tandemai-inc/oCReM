@@ -1,23 +1,23 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 
+import argparse
 import json
 import os
 import pickle
 import random
 
-from ta_base.common.util import ArgumentParser
-
 from ta_gen.tool.crem_runner import CremRunner
 from ta_gen.tool.post_processing import PostProcessor
 from ta_gen.utils.common_utils import read_scaffolds
-from ta_gen.utils.const import MAXINUM_NUM_OF_MOLS_TO_GROW, MAXINUM_NUM_OF_OUTPUT_MOLS
+from ta_gen.utils.const import (MAXINUM_NUM_OF_MOLS_TO_GROW,
+                                MAXINUM_NUM_OF_OUTPUT_MOLS)
 from ta_gen.utils.logger import LOGGER
 from ta_gen.utils.prop_filter import Filter
 
 
 def schema_parser():
-    parser = ArgumentParser(conflict_handler="resolve", add_help=False)
+    parser = argparse.ArgumentParser(conflict_handler="resolve", add_help=False)
     group = parser.add_argument_group("Required arguments")
     group.add_argument("-w", "--work_dir", required=True, help="working directory.")
     group.add_argument(

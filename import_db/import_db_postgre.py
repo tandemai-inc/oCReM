@@ -1,4 +1,5 @@
 import argparse
+import configparser
 import copy
 import os
 
@@ -6,7 +7,6 @@ import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from tqdm import tqdm
 
-import configparser
 
 def load_ini(ini_file):
     config = configparser.ConfigParser()
@@ -31,7 +31,7 @@ def create_db(conn_params):
         exists = cursor.fetchone()
 
         if not exists:
-            cursor.execute(f"CREATE DATABASE \"{db_name}\"")
+            cursor.execute(f'CREATE DATABASE "{db_name}"')
             print("Database created")
         else:
             print("Database already exists")

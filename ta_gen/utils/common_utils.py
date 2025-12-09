@@ -8,14 +8,13 @@ import inspect
 import re
 import traceback
 from pathlib import Path
+from typing import Iterator, List
 
 import pandas as pd
 from rdkit import Chem
 from rdkit.Chem import QED, AllChem, Descriptors, rdFreeSASA, rdMolDescriptors
 
 from ta_gen.utils.const import MAXINUM_NUM_OF_OUTPUT_MOLS
-from typing import Iterator, List
-
 
 from .sascore import calculateScore
 

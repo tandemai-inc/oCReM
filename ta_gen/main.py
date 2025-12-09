@@ -7,11 +7,13 @@ import pathlib
 import pickle
 
 import yaml
+
 from ta_gen.utils.cmd import cmd
 from ta_gen.utils.common_utils import dict_to_cmdline
-from ta_gen.utils.const import MAXINUM_NUM_OF_MOLS_TO_GROW, MAXINUM_NUM_OF_OUTPUT_MOLS
+from ta_gen.utils.const import (MAXINUM_NUM_OF_MOLS_TO_GROW,
+                                MAXINUM_NUM_OF_OUTPUT_MOLS)
 
-MODULE_PATH = pathlib.Path(__file__).parents[1] / "module"
+MODULE_PATH = pathlib.Path(__file__).parents[1] / "ta_gen" / "module"
 
 
 def parse_args():  # pragma: no cover
@@ -45,7 +47,7 @@ def init_grow(paras):
     result_file = f"./scr/init_grow/init_grow.pkl"
 
     run_ta_prop = paras["parameter"]["master"]["run_ta_prop"]
-    paras = {
+    _paras = {
         "work_dir": work_dir,
         "result_file": result_file,
         "result_out": paras["parameter"]["master"]["result_out"],
@@ -57,12 +59,12 @@ def init_grow(paras):
             "user_provided_output_file"
         ],
     }
-    paras.update(paras["parameter"]["crem"])
+    _paras.update(paras["parameter"]["crem"])
     if run_ta_prop:
-        paras.update(paras["parameter"]["ta_prop"])
+        _paras.update(paras["parameter"]["ta_prop"])
 
     return_code, stdout, stderr = cmd(
-        f"python {MODULE_PATH}/init_grow.py {dict_to_cmdline(paras)}"
+        f"python {MODULE_PATH}/init_grow.py {dict_to_cmdline(_paras)}"
     )
     if return_code != 0:
         raise Exception(
@@ -104,7 +106,7 @@ def grow_mol(pre_grow_result, index, paras):
         with open(input_smi, "w") as f:
             f.write(smi)
 
-        paras = {
+        _paras = {
             "work_dir": work_dir,
             "result_file": result_file,
             "task_index": i,
@@ -114,10 +116,10 @@ def grow_mol(pre_grow_result, index, paras):
             "protect_id": protect_id,
             "max_replacements": max_replacements,
         }
-        paras.update(paras["parameter"]["crem"])
+        _paras.update(paras["parameter"]["crem"])
 
     return_code, stdout, stderr = cmd(
-        f"python {MODULE_PATH}/init_grow.py {dict_to_cmdline(paras)}"
+        f"python {MODULE_PATH}/init_grow.py {dict_to_cmdline(_paras)}"
     )
     if return_code != 0:
         raise Exception(
@@ -130,7 +132,7 @@ def grow_mol(pre_grow_result, index, paras):
     return result_dict
 
 
-def post_grow_mol(grow_result, index, paras, protect_id):
+def post_grow_mol(index, paras, protect_id):
     grow_mol_dir = f"./scr/grow_mol/{index}/outputs"
     work_dir = f"./scr/grow_mol/{index}"
     result_file = f"./scr/init_grow/init_grow.pkl"
@@ -141,7 +143,7 @@ def post_grow_mol(grow_result, index, paras, protect_id):
         "max_mols_gen", MAXINUM_NUM_OF_OUTPUT_MOLS
     )
 
-    paras = {
+    _paras = {
         "work_dir": work_dir,
         "result_file": result_file,
         "result_out": paras["parameter"]["master"]["result_out"],
@@ -152,11 +154,11 @@ def post_grow_mol(grow_result, index, paras, protect_id):
         "max_mols_gen": max_mols_gen,
         "last_iteration": index == len(protect_id) - 1,
     }
-    paras.update(paras["parameter"]["crem"])
+    _paras.update(paras["parameter"]["crem"])
     if run_ta_prop:
-        paras.update(paras["parameter"]["ta_prop"])
+        _paras.update(paras["parameter"]["ta_prop"])
     return_code, stdout, stderr = cmd(
-        f"python {MODULE_PATH}/init_grow.py {dict_to_cmdline(paras)}"
+        f"python {MODULE_PATH}/init_grow.py {dict_to_cmdline(_paras)}"
     )
     if return_code != 0:
         raise Exception(
@@ -178,14 +180,13 @@ def main(paras):
     while not crem_rg_finished:
         if crem_rg_next_iter:
             protect_id = pre_grow_result["protect_id"]
-            grow_result = grow_mol(pre_grow_result, index, paras)
+            grow_mol(pre_grow_result, index, paras)
             crem_rg_finished, crem_rg_next_iter, pre_grow_result = post_grow_mol(
-                grow_result, index, paras, protect_id
+                index, paras, protect_id
             )
             index += 1
-        yield False
-
-    yield True
+        else:
+            break
 
 
 if __name__ == "__main__":
