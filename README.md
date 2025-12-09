@@ -8,6 +8,7 @@ Original ChemBL fragment library: [http://www.qsar4u.com/pages/crem.php](https:/
 
 
 ## Create Postgres Database
+Ensure you have installed postgres and created a database.
 
 ### Download the modified CrEM library
 You can download the modified CrEM library from [https://zenodo.org/records/17796862/files/crem.tar.gz?download=1](https://zenodo.org/records/17796862/files/crem.tar.gz?download=1).
