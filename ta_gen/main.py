@@ -43,8 +43,8 @@ def read_config(config_file):
 
 
 def init(paras):
-    db_path = paras["db_path"]
-    db_config = paras["db_config"]
+    db_path = paras.get("db_path", None)
+    db_config = paras.get("db_config", None)
     if db_config:
         paras["db_engine"] = "postgres"
     elif db_path:
@@ -89,16 +89,16 @@ def init_grow(paras):
 
 def grow_mol(pre_grow_result, index, paras):
     work_dir = f"./scr/grow_mol/{index}/outputs"
-    result_file = f"./scr/grow_mol/{index}/grow_mol.pkl"
+    os.makedirs(work_dir, exist_ok=True)
 
     smarts = pre_grow_result["smarts_list"][index]
     smarts_file = os.path.join(work_dir, "in.smarts")
     with open(smarts_file, "w") as f:
         f.write(smarts)
 
-    protect_id = pre_grow_result["protect_id"][index]
+    protect_id = pre_grow_result["protect_id_list"][index]
 
-    if index != len(protect_id) - 1:  # not final grow mol
+    if index != len(pre_grow_result["protect_id_list"]) - 1:  # not final grow mol
         max_replacements = MAXINUM_NUM_OF_MOLS_TO_GROW  # intermediate grow
     else:
         max_replacements = (
@@ -116,7 +116,7 @@ def grow_mol(pre_grow_result, index, paras):
 
         _paras = {
             "work_dir": work_dir,
-            "result_file": result_file,
+            "result_file": f"{work_dir}/task_{i}.pkl",
             "task_index": i,
             "input_smi": input_smi,
             "scaffolds_file": paras["parameter"]["master"]["scaffolds_file"],
@@ -126,24 +126,20 @@ def grow_mol(pre_grow_result, index, paras):
         }
         _paras.update(paras["parameter"]["crem"])
 
-    return_code, stdout, stderr = cmd(
-        f"python {MODULE_PATH}/init_grow.py {dict_to_cmdline(_paras)}"
-    )
-    if return_code != 0:
-        raise Exception(
-            f"grow mol failed, return code: {return_code}, stdout: {stdout}, stderr: {stderr}"
+        return_code, stdout, stderr = cmd(
+            f"python {MODULE_PATH}/grow_mol.py {dict_to_cmdline(_paras)}"
         )
-
-    with open(result_file, "rb") as f:
-        result_dict = pickle.load(f)
-
-    return result_dict
+        if return_code != 0:
+            raise Exception(
+                f"grow mol failed, return code: {return_code}, stdout: {stdout}, stderr: {stderr}"
+            )
 
 
 def post_grow_mol(index, paras, protect_id):
     grow_mol_dir = f"./scr/grow_mol/{index}/outputs"
-    work_dir = f"./scr/grow_mol/{index}"
-    result_file = f"./scr/init_grow/init_grow.pkl"
+    work_dir = f"./scr/post_grow_mol/{index}"
+    result_file = f"./scr/post_grow_mol/post_grow_mol_{index}.pkl"
+    os.makedirs(work_dir, exist_ok=True)
 
     run_ta_prop = paras["parameter"]["master"]["run_ta_prop"]
 
@@ -166,7 +162,7 @@ def post_grow_mol(index, paras, protect_id):
     if run_ta_prop:
         _paras.update(paras["parameter"]["ta_prop"])
     return_code, stdout, stderr = cmd(
-        f"python {MODULE_PATH}/init_grow.py {dict_to_cmdline(_paras)}"
+        f"python {MODULE_PATH}/post_grow_mol.py {dict_to_cmdline(_paras)}"
     )
     if return_code != 0:
         raise Exception(
@@ -185,10 +181,10 @@ def main(paras):
     init(paras["parameter"]["crem"])
     print("Create Crem RGroup Enumeration tasks")
     crem_rg_finished, crem_rg_next_iter, pre_grow_result = init_grow(paras)
+    protect_id = pre_grow_result["protect_id_list"]
     index = 1
     while not crem_rg_finished:
         if crem_rg_next_iter:
-            protect_id = pre_grow_result["protect_id"]
             grow_mol(pre_grow_result, index, paras)
             crem_rg_finished, crem_rg_next_iter, pre_grow_result = post_grow_mol(
                 index, paras, protect_id
