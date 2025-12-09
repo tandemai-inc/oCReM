@@ -13,8 +13,7 @@
                                                 # will skip enumeration and only run post process on the user provided mol list. 
         },
         "crem": {
-            "database": "",                     # sqlite database to be used for generating the library
-            "db_config": "",                    # ini config file for postgres db
+            "db_config": "",                    # config file for postgres db
             "radius": 3,                        # radius of context which will be considered for replacement
             "min_atoms": 1,                     # minimum number of atoms in the fragment which will replace H
             "max_atoms": 2,                     # maximum number of atoms in the fragment which will replace H

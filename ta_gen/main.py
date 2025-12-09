@@ -174,6 +174,7 @@ def post_grow_mol(index, paras, protect_id):
 
 
 def main(paras):
+    init()
     print("Create Crem RGroup Enumeration tasks")
     crem_rg_finished, crem_rg_next_iter, pre_grow_result = init_grow(paras)
     index = 1

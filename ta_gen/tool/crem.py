@@ -640,12 +640,6 @@ def grow_mol2(*args, **kwargs):
     return list(grow_mol(*args, **kwargs))
 
 
-def update_db_config(db_engine, db_config):
-    if db_engine == "postgres":
-        db_config = get_db_config(db_config)
-        db_config["engine"] = db_engine
-    elif db_engine == "sqlite":
-        db_config = {"path": db_config, "engine": db_engine}
-    else:
-        raise ValueError(f"Unsupported db_engine: {db_engine}")
+def update_db_config(db_config):
+    db_config = get_db_config(db_config)
     return db_config
