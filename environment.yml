@@ -10,3 +10,6 @@ dependencies:
   - sqlite
   - pyyaml
   - rdkit=2024.03.5
+  - pip
+  - pip:
+    - crem==0.2.9

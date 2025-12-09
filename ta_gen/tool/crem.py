@@ -12,10 +12,7 @@ import psycopg2
 
 from ta_gen.utils.common_utils import get_db_config, standardize_smiles
 
-try:
-    from crem.mol_context import get_canon_context_core, patt_remove_map
-except (ImportError, ModuleNotFoundError):
-    print("CREM package is not installed!")
+from crem.mol_context import get_canon_context_core, patt_remove_map
 
 from rdkit import Chem
 from rdkit.Chem import rdMMPA
