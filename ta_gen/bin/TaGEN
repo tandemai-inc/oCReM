@@ -1,0 +1,26 @@
+#!/bin/bash
+
+
+function usage() {
+  echo "usage: TaGEN [-i|-W|-C|-|w|-u|-g|-t|-a|-j|-m|-h]
+
+  Optional arguments:
+    -i/--config           The path of config file
+  "
+}
+
+function set_env() {
+  export PYTHONUNBUFFERED=1
+  export PYTHONPATH="$PKG_ROOT_DIR:$PYTHONPATH"
+  export PATH=$PKG_DIR/bin:$PATH
+}
+
+
+ORG_OPTS="$@"
+SCRIPT=$(readlink -f "$0")
+SCRIPT_DIR=$(dirname "$SCRIPT")
+PKG_DIR=$(dirname $(dirname "$SCRIPT"))
+PKG_ROOT_DIR=$(dirname "$PKG_DIR")
+set_env
+
+python $PKG_DIR/main.py $ORG_OPTS

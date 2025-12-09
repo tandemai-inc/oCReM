@@ -18,17 +18,20 @@ def create_db(conn_params):
     # check if new db already exists
     try:
         default_db_config = copy.deepcopy(conn_params)
+        db_name = conn_params["database"]
         default_db_config["user"] = "postgres"
+        default_db_config["database"] = "postgres"
+
         conn = psycopg2.connect(**default_db_config)
         conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
         cursor = conn.cursor()
 
-        # 检查数据库是否存在
-        cursor.execute("SELECT 1 FROM pg_database WHERE datname = 'gen_chembl_tmp'")
+        # check if db already exists
+        cursor.execute(f"SELECT 1 FROM pg_database WHERE datname = '{db_name}'")
         exists = cursor.fetchone()
 
         if not exists:
-            cursor.execute("CREATE DATABASE gen_chembl_tmp")
+            cursor.execute(f"CREATE DATABASE \"{db_name}\"")
             print("Database created")
         else:
             print("Database already exists")
@@ -182,9 +185,9 @@ def restore_indexes(conn_params):
 
 def schema_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-i", "--ini_file", type=str)
-    parser.add_argument("-d", "--data_folder", type=str)
-    return parser.parse_args()
+    parser.add_argument("-i", "--ini_file", type=str, required=True)
+    parser.add_argument("-d", "--data_folder", type=str, required=True)
+    return parser
 
 
 def parse_args():

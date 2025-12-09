@@ -14,6 +14,8 @@ from rdkit import Chem
 from rdkit.Chem import QED, AllChem, Descriptors, rdFreeSASA, rdMolDescriptors
 
 from ta_gen.utils.const import MAXINUM_NUM_OF_OUTPUT_MOLS
+from typing import Iterator, List
+
 
 from .sascore import calculateScore
 

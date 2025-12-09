@@ -183,7 +183,7 @@ def schema_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("-D", "--db_file", type=str, default="gen_chembl.db")
     parser.add_argument("-d", "--data_folder", type=str)
-    return parser.parse_args()
+    return parser
 
 
 def parse_args():

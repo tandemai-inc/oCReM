@@ -224,22 +224,6 @@ class PostgresExporter:
             if self.export_table_data(table):
                 success_count += 1
 
-        # 4. export indexes
-        print("\nexporting indexes...")
-        self.export_indexes()
-
-        # 5. export foreign key constraints
-        print("exporting foreign key constraints...")
-        self.export_foreign_keys()
-
-        # 6. export sequences
-        print("exporting sequences...")
-        self.export_sequences()
-
-        # 7. export metadata
-        print("exporting metadata...")
-        self.export_metadata(tables, success_count)
-
         print(f"\n{'=' * 50}")
         print(f"export completed successfully!")
         print(f"export directory: {self.export_dir}")
