@@ -21,7 +21,7 @@ tar -xzf crem.tar.gz
 ### Import the modified CrEM library to the postgres database
 You should create .ini file for postgres database, the template is ./import_db/db.ini
 ```bash
-python import_db/import_db_postgre.py -i frag.ini -d ./data
+python import_db/import_db_postgre.py -i db.ini -d ./data
 ```
 
 ## Create conda environment
