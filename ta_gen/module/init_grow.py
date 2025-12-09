@@ -12,10 +12,12 @@ from ta_base.exception.ta_module_exception import TAModuleException
 
 from ta_gen.tool.crem_runner import CremRunner
 from ta_gen.tool.post_processing import PostProcessor
-from ta_gen.utils.common_utils import (get_smiles_list_from_csv, load_db_query,
-                                       read_scaffolds)
-from ta_gen.utils.const import (MAXINUM_NUM_OF_MOLS_TO_GROW,
-                                MAXINUM_NUM_OF_OUTPUT_MOLS)
+from ta_gen.utils.common_utils import (
+    get_smiles_list_from_csv,
+    load_db_query,
+    read_scaffolds,
+)
+from ta_gen.utils.const import MAXINUM_NUM_OF_MOLS_TO_GROW, MAXINUM_NUM_OF_OUTPUT_MOLS
 from ta_gen.utils.logger import LOGGER
 from ta_gen.utils.prop_filter import Filter
 

@@ -9,8 +9,7 @@ import pickle
 import yaml
 from src.utils.cmd import cmd
 from src.utils.common_utils import dict_to_cmdline
-from src.utils.const import (MAXINUM_NUM_OF_MOLS_TO_GROW,
-                             MAXINUM_NUM_OF_OUTPUT_MOLS)
+from src.utils.const import MAXINUM_NUM_OF_MOLS_TO_GROW, MAXINUM_NUM_OF_OUTPUT_MOLS
 
 MODULE_PATH = pathlib.Path(__file__).parents[1] / "module"
 
