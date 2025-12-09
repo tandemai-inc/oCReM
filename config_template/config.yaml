@@ -14,7 +14,6 @@
         },
         "crem": {
             "db_config": "",                    # config file for postgres db
-            "db_path": "",                      # sqlite database to be used for generating the library
             "radius": 3,                        # radius of context which will be considered for replacement
             "min_atoms": 1,                     # minimum number of atoms in the fragment which will replace H
             "max_atoms": 2,                     # maximum number of atoms in the fragment which will replace H

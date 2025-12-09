@@ -10,6 +10,7 @@ function usage() {
 }
 
 function set_env() {
+  conda activate crem
   export PYTHONUNBUFFERED=1
   export PYTHONPATH="$PKG_ROOT_DIR:$PYTHONPATH"
   export PATH=$PKG_DIR/bin:$PATH
