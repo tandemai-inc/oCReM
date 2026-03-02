@@ -14,7 +14,7 @@ def schema_parser():
     parser = argparse.ArgumentParser(description="Create database")
     parser.add_argument("-i", "--input_file", type=str, required=True, help="Input compounds")
     parser.add_argument('-o', '--out', metavar='output.txt', required=False, default='output.txt', help='output file of fragmented molecules.')
-    parser.add_argument('-d', '--debug', action='store_true', default=False, help='print debug message.')
+    parser.add_argument( '--debug', action='store_true', default=False, help='print debug message.')
     parser.add_argument("--chunk_size", type=int, default=100, help="Chunk size")
     parser.add_argument('-c', '--ncpu', metavar='NUMBER', required=False, default=1, help='number of cpus used for computation. Default: 1.')
     parser.add_argument('-s', '--sep', metavar='STRING', required=False, default=",",
@@ -30,8 +30,22 @@ def schema_parser():
 
 def parse_args():
     parser = schema_parser()
-    args = parser.parse_known_args()
+    args, _ = parser.parse_known_args()
     return args
+
+
+def read_chunks(input_file, chunk_size, sep):
+    input_file = args.input_file
+    _, ext = os.path.splitext(input_file)
+    if ext == ".csv":
+        chunks = pd.read_csv(input_file, sep=args.sep, chunksize=args.chunk_size)
+    elif ext == ".smi":
+        chunks = pd.read_csv(input_file, header=None, names=["smiles", "smi_id"], sep=args.sep,
+                             chunksize=args.chunk_size)
+    else:
+        chunks = pd.read_csv(input_file, header=None, names=["smiles", "smi_id"], sep=args.sep,
+                             chunksize=args.chunk_size)
+    return chunks
 
 
 def __fragment_mol_heavy_atoms(df):
@@ -69,44 +83,42 @@ def __fragment_mol_hydrogen(df):
             results.extend([(smi, smi_id, core, chains) for core, chains in frags])
     return results
 
-def fragment_mols(chunks, num_cpus, mode, sep_out, output_file='output.txt', debug=False):
-    if debug:
-        f_output = open(output_file, 'w')
-        # create csv writer
-        csv_writer = csv.writer(f_output, delimiter=sep_out)
-        # write header
-        csv_writer.writerow(["smiles", "smi_id", "core", "chains"])
-
-    if mode in [0, 1]:
-        with Pool(num_cpus) as p:
-            frags = p.imap_unordered(__fragment_mol_heavy_atoms, chunks)
-            if debug:
-                for frag in frags:
-                    if frag is None:
-                        continue
-                    csv_writer.writerows(frag)
-
-    if mode in [1,2]:
-        with Pool(num_cpus) as p:
-            frags = p.imap_unordered(__fragment_mol_hydrogen, chunks)
-            if debug:
-                for frag in frags:
-                    if frag is None:
-                        continue
-                    csv_writer.writerows(frag)
+def fragment_mols(args):
+    if args.debug:
+        with open(args.out, 'w') as f_output:
+            # create csv writer
+            csv_writer = csv.writer(f_output, delimiter=args.sep_out)
+            # write header
+            csv_writer.writerow(["smiles", "smi_id", "core", "chains"])
+            if args.mode in [0, 1]:
+                chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
+                with Pool(args.ncpu) as p:
+                    frags_heavy_atoms = p.imap_unordered(__fragment_mol_heavy_atoms, chunks)
+                    for frag in frags_heavy_atoms:
+                        if frag is None:
+                            continue
+                        csv_writer.writerows(frag)
+            if args.mode in [1, 2]:
+                chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
+                with Pool(args.ncpu) as p:
+                    frags_hydrogen = p.imap_unordered(__fragment_mol_hydrogen, chunks)
+                    for frag in frags_hydrogen:
+                        if frag is None:
+                            continue
+                        csv_writer.writerows(frag)
+    else:
+        if args.mode in [0, 1]:
+            chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
+            with Pool(args.ncpu) as p:
+                frags_heavy_atoms = p.imap_unordered(__fragment_mol_heavy_atoms, chunks)
+        if args.mode in [1, 2]:
+            chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
+            with Pool(args.ncpu) as p:
+                frags_hydrogen = p.imap_unordered(__fragment_mol_hydrogen, chunks)
 
 
 def create_db(args):
-    input_file = args.input_file
-    _, ext = os.path.splitext(input_file)
-    if ext == ".csv":
-        chunks = pd.read_csv(input_file, sep=args.sep, chunksize=args.chunk_size)
-    elif ext == ".smi":
-        chunks = pd.read_csv(input_file, header=None, names=["smiles", "smi_id"], sep=args.sep, chunksize=args.chunk_size)
-    else:
-        chunks = pd.read_csv(input_file, header=None, names=["smiles", "smi_id"], sep=args.sep, chunksize=args.chunk_size)
-
-    fragment_mols(chunks, args.ncpu, args.mode, args.sep_out, args.out, args.debug)
+    fragment_mols(args)
 
 
 if __name__ == "__main__":
