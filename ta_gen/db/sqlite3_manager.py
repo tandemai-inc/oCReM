@@ -140,6 +140,19 @@ class SqliteManager(DBManager):
         """
         self.cursor.executemany(upsert_sql, upsert_data)
 
+
+    def insert(self, fragments, envs, env_fragment_counter, radius):
+        self.connect_db()
+        try:
+            fragment_ids = self.insert_new_fragment(fragments)
+            env_ids = self.insert_new_env(envs, radius)
+            self.insert_env_fragment(env_fragment_counter, fragment_ids, env_ids)
+            self.conn.commit()
+        except:
+             self.conn.rollback()
+        finally:
+            self.close()
+
     def close(self):
         self.cursor.close()
         self.conn.close()

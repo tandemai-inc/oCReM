@@ -281,11 +281,7 @@ def batch_insert_db(data, db_manager, radius):
         envs.add(env)
         combo_counter[(core_smi, env)] += 1
 
-    fragment_ids = db_manager.insert_new_fragment(fragments)
-    env_ids = db_manager.insert_new_env(envs, radius)
-    db_manager.connect_db()
-    db_manager.insert_new_env_fragment(combo_counter, fragment_ids, env_ids)
-    db_manager.close()
+    db_manager.insert(fragments, envs, combo_counter, radius)
 
 
 def upload_to_db(q, db_manager, radius, batch_size=10000):
