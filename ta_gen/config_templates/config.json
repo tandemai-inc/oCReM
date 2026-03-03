@@ -1,0 +1,19 @@
+{
+  "input": {
+    "input_file": "",
+    "output_file": "",
+    "debug": true,
+    "ncpu": 1,
+    "sep": ",",
+    "out_sep": ","
+  },
+  "fragmentation": {
+    "chunk_size": 100,
+    "mode": 1
+  },
+  "frag_to_env": {
+    "max_heavy_atoms": 20,
+    "radius": 1,
+    "keep_stereo": false
+  }
+}

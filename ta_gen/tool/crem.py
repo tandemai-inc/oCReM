@@ -8,13 +8,11 @@ from itertools import product
 from multiprocessing import Pool, cpu_count
 
 import psycopg2
-
-from ta_gen.utils.common_utils import get_db_config, standardize_smiles
-
 from crem.mol_context import get_canon_context_core, patt_remove_map
-
 from rdkit import Chem
 from rdkit.Chem import rdMMPA
+
+from ta_gen.utils.common_utils import get_db_config, standardize_smiles
 
 cycle_pattern = re.compile(r"[a-zA-Z\]][1-9]+")
 Chem.SetDefaultPickleProperties(Chem.PropertyPickleOptions.AllProps)

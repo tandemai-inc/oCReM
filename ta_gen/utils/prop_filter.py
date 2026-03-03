@@ -8,8 +8,7 @@ from multiprocessing import Pool, cpu_count
 
 import numpy as np
 from rdkit import Chem
-from rdkit.Chem.Descriptors import (TPSA, MolLogP, MolWt, NumHAcceptors,
-                                    NumHDonors)
+from rdkit.Chem.Descriptors import TPSA, MolLogP, MolWt, NumHAcceptors, NumHDonors
 from rdkit.Chem.rdMolDescriptors import CalcNumRotatableBonds
 
 from ta_gen.tool.property_utils import GetNumHeavyAtoms

@@ -10,8 +10,7 @@ import yaml
 
 from ta_gen.utils.cmd import cmd
 from ta_gen.utils.common_utils import dict_to_cmdline
-from ta_gen.utils.const import (MAXINUM_NUM_OF_MOLS_TO_GROW,
-                                MAXINUM_NUM_OF_OUTPUT_MOLS)
+from ta_gen.utils.const import MAXINUM_NUM_OF_MOLS_TO_GROW, MAXINUM_NUM_OF_OUTPUT_MOLS
 
 MODULE_PATH = pathlib.Path(__file__).parents[1] / "ta_gen" / "module"
 
