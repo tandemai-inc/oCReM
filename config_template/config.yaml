@@ -2,7 +2,7 @@
     "parameter": {
         "master": {
             "tool": "crem",                     # enum ["crem", "post-process"]
-            "scaffolds_file": "",               # scaffold smiles file
+            "scaffolds_file": "input.smi",               # scaffold smiles file
             "result_out": "result.csv",
             "run_ta_prop": false,
             # multi-processing setting
@@ -13,7 +13,7 @@
                                                 # will skip enumeration and only run post process on the user provided mol list. 
         },
         "crem": {
-            "db_config": "",                    # config file for postgres db
+            "db_config": "db.ini",                    # config file for postgres db
             "radius": 3,                        # radius of context which will be considered for replacement
             "min_atoms": 1,                     # minimum number of atoms in the fragment which will replace H
             "max_atoms": 2,                     # maximum number of atoms in the fragment which will replace H

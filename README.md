@@ -22,6 +22,11 @@ Make sure you have installed postgres and created a database.
 
 ### Download the modified CrEM library
 You can download the modified CrEM library from [https://zenodo.org/records/17796862/files/crem.tar.gz?download=1](https://zenodo.org/records/17796862/files/crem.tar.gz?download=1).
+```
+mkdir run
+cd run
+wget https://zenodo.org/records/17796862/files/crem.tar.gz
+```
 
 ### Unzip the modified CrEM library
 ```bash
@@ -31,18 +36,29 @@ tar -xzf crem.tar.gz
 ### Import the modified CrEM library to the postgres database
 You should create .ini file for postgres database, the template is ./import_db/db.ini
 ```bash
-python import_db/import_db_postgre.py -i db.ini -d ./data
+cp ../import_db/db.ini db.ini
+# Edit the db.ini file to set the database connection parameters
+# activate conda env
+conda activate crem
+# Run the import script
+python ../import_db/import_db_postgres.py -i db.ini -d ./data
 ```
 
 ## Usage
 
 ### Create config file
 
-The template is under config_template/config.yml. Set the parameter-crem-db_config to db.ini.
+The template is under config_template/config.yaml. Set the parameter-crem-db_config to db.ini.
 
 ### Run
 ```bash
-./ta_gen/bin/TaGEN -i config.yml
+# copy config.yaml to run directory
+cp ../config_template/config.yaml config.yaml
+# create scaffolds_file and set smart in it, for example:
+# scaffolds_file: input.smi
+# the content in scaffolds_file:
+# [*:1]c1ccnc(N[*:2])c1
+../ta_gen/bin/TaGEN -i config.yaml
 ```
 
 
