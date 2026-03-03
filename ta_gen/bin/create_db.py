@@ -5,15 +5,20 @@ import argparse
 import csv
 import os
 import sys
+from collections import Counter
 from functools import partial
 from itertools import permutations
-from multiprocessing import Pool, cpu_count
+from multiprocessing import Pool
+from queue import Queue
+from threading import Thread
 
 import pandas as pd
 from rdkit import Chem
 from rdkit.Chem import rdMMPA
 
-from ta_gen.utils.mol_context import get_std_context_core_permutations
+from ta_gen.db import create_db_manager
+from ta_gen.utils.mol_context import (combine_core_env_to_rxn_smarts,
+                                      get_std_context_core_permutations)
 
 
 def schema_parser():
@@ -82,6 +87,7 @@ def schema_parser():
         "--radius",
         metavar="NUMBER",
         required=False,
+        type=int,
         default=1,
         help="radius of molecular context (in bonds) which will be taken into account. Default: 1.",
     )
@@ -90,6 +96,15 @@ def schema_parser():
         action="store_true",
         default=False,
         help="set this flag if you want to keep stereo in context and core parts.",
+    )
+    group = parser.add_argument_group("Database Parameters")
+    group.add_argument(
+        "--db_type",
+        metavar="STRING",
+        required=False,
+        default="sqlite",
+        choices=["sqlite", "postgres"],
+        help="database type. Default: sqlite.",
     )
     return parser
 
@@ -125,9 +140,25 @@ def read_chunks(input_file, chunk_size, sep):
     return chunks
 
 
+def calc_mp(env, core):
+    sma = combine_core_env_to_rxn_smarts(core, env, False)
+    if core.count("*") == 2:
+        mol = Chem.MolFromSmiles(core, sanitize=False)
+        mat = Chem.GetDistanceMatrix(mol)
+        ids = []
+        for a in mol.GetAtoms():
+            if not a.GetAtomicNum():
+                ids.append(a.GetIdx())
+        dist2 = mat[ids[0], ids[1]]
+    else:
+        dist2 = 0
+    return sma, dist2
+
+
 def frag_to_env(smi, core, contexts, max_heavy_atoms, radius, keep_stereo):
+    results = []
     if not core and not contexts:
-        return None
+        return results
 
     if not core:  # one split
         residues = contexts.split(".")
@@ -143,7 +174,8 @@ def frag_to_env(smi, core, contexts, max_heavy_atoms, radius, keep_stereo):
                         context, core, radius, keep_stereo
                     )
                     if env and cores:
-                        return env, cores[0], num_heavy_atoms
+                        sma, dist2 = calc_mp(env, cores[0])
+                        results.append((env, cores[0], num_heavy_atoms, sma, dist2))
         else:
             sys.stderr.write(
                 f"more than two fragments in context ({contexts}) where core is empty for smiles: {smi}"
@@ -157,9 +189,11 @@ def frag_to_env(smi, core, contexts, max_heavy_atoms, radius, keep_stereo):
                 contexts, core, radius, keep_stereo
             )
             if env and cores:
-                return env, cores[0], num_heavy_atoms
+                for c in cores:
+                    sma, dist2 = calc_mp(env, c)
+                    results.append((env, c, num_heavy_atoms, sma, dist2))
 
-    return None
+    return results
 
 
 def __fragment_mol_heavy_atoms(df, max_heavy_atoms, radius, keep_stereo):
@@ -190,9 +224,10 @@ def __fragment_mol_heavy_atoms(df, max_heavy_atoms, radius, keep_stereo):
             env_results = frag_to_env(
                 smi, core, chains, max_heavy_atoms, radius, keep_stereo
             )
-            if env_results is not None:
-                env, cores, num_heavy_atoms = env_results
-                results.append((smi, smi_id, core, chains, env, cores, num_heavy_atoms))
+            for env, cores, num_heavy_atoms, sma, dist2 in env_results:
+                results.append(
+                    (smi, smi_id, core, chains, env, cores, num_heavy_atoms, sma, dist2)
+                )
     return results
 
 
@@ -219,21 +254,77 @@ def __fragment_mol_hydrogen(df, max_heavy_atoms, radius, keep_stereo):
                 env_results = frag_to_env(
                     smi, core, chains, max_heavy_atoms, radius, keep_stereo
                 )
-                if env_results is not None:
-                    env, cores, num_heavy_atoms = env_results
+                for env, cores, num_heavy_atoms, sma, dist2 in env_results:
                     results.append(
-                        (smi, smi_id, core, chains, env, cores, num_heavy_atoms)
+                        (
+                            smi,
+                            smi_id,
+                            core,
+                            chains,
+                            env,
+                            cores,
+                            num_heavy_atoms,
+                            sma,
+                            dist2,
+                        )
                     )
     return results
 
 
+def batch_insert_db(data, db_manager, radius):
+    fragments = {}
+    envs = set()
+    combo_counter = Counter()
+    for row in data:
+        smi, smi_id, core, chains, env, core_smi, num_heavy_atoms, sma, dist2 = row
+        fragments.update({core_smi: (num_heavy_atoms, dist2)})
+        envs.add(env)
+        combo_counter[(core_smi, env)] += 1
+
+    fragment_ids = db_manager.insert_new_fragment(fragments)
+    env_ids = db_manager.insert_new_env(envs, radius)
+    db_manager.connect_db()
+    db_manager.insert_new_env_fragment(combo_counter, fragment_ids, env_ids)
+    db_manager.close()
+
+
+def upload_to_db(q, db_manager, radius, batch_size=10000):
+    batch = []
+    while True:
+        data = q.get()
+        if data is None:
+            if batch:
+                batch_insert_db(batch, db_manager, radius)
+            break
+        batch.append(data)
+        if len(batch) >= batch_size:
+            batch_insert_db(batch, db_manager, radius)
+            batch = []
+
+
 def fragment_mols(args):
+    db_manager = create_db_manager(args.db_type)
+    q = Queue()
+    t = Thread(target=upload_to_db, args=(q, db_manager, args.radius, args.batch_size))
+    t.start()
     if args.debug:
         with open(args.out, "w") as f_output:
             # create csv writer
             csv_writer = csv.writer(f_output, delimiter=args.sep_out)
             # write header
-            csv_writer.writerow(["smiles", "smi_id", "core", "chains"])
+            csv_writer.writerow(
+                [
+                    "smiles",
+                    "smi_id",
+                    "core",
+                    "chains",
+                    "env",
+                    "cores",
+                    "num_heavy_atoms",
+                    "sma",
+                    "dist2",
+                ]
+            )
             if args.mode in [0, 1]:
                 chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
                 with Pool(args.ncpu) as p:
@@ -247,6 +338,7 @@ def fragment_mols(args):
                     for frag in frags_heavy_atoms:
                         if frag is None:
                             continue
+                        q.put(frag)
                         csv_writer.writerows(frag)
             if args.mode in [1, 2]:
                 chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
@@ -261,16 +353,40 @@ def fragment_mols(args):
                     for frag in frags_hydrogen:
                         if frag is None:
                             continue
+                        q.put(frag)
                         csv_writer.writerows(frag)
     else:
         if args.mode in [0, 1]:
             chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
+            __fragment_mol = partial(
+                __fragment_mol_heavy_atoms,
+                max_heavy_atoms=args.max_heavy_atoms,
+                radius=args.radius,
+                keep_stereo=args.keep_stereo,
+            )
             with Pool(args.ncpu) as p:
-                frags_heavy_atoms = p.imap_unordered(__fragment_mol_heavy_atoms, chunks)
+                frags_heavy_atoms = p.imap_unordered(__fragment_mol, chunks)
+                for frag in frags_heavy_atoms:
+                    if frag is None:
+                        continue
+                    q.put(frag)
         if args.mode in [1, 2]:
             chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
+            __fragment_mol = partial(
+                __fragment_mol_hydrogen,
+                max_heavy_atoms=args.max_heavy_atoms,
+                radius=args.radius,
+                keep_stereo=args.keep_stereo,
+            )
             with Pool(args.ncpu) as p:
-                frags_hydrogen = p.imap_unordered(__fragment_mol_hydrogen, chunks)
+                frags_hydrogen = p.imap_unordered(__fragment_mol, chunks)
+                for frag in frags_hydrogen:
+                    if frag is None:
+                        continue
+                    q.put(frag)
+
+    q.put(None)
+    t.join()
 
 
 def create_db(args):
