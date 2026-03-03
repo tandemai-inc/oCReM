@@ -272,36 +272,30 @@ def __fragment_mol_hydrogen(df, max_heavy_atoms, radius, keep_stereo):
 
 
 def batch_insert_db(data, db_manager, radius):
-    fragments = {}
     envs = set()
+    fragments = {}
     combo_counter = Counter()
     for row in data:
         smi, smi_id, core, chains, env, core_smi, num_heavy_atoms, sma, dist2 = row
-        fragments.update({core_smi: (num_heavy_atoms, dist2)})
         envs.add(env)
-        combo_counter[(core_smi, env)] += 1
+        fragments.update({core_smi: (num_heavy_atoms, dist2)})
+        combo_counter[(env, core_smi)] += 1
 
-    db_manager.insert(fragments, envs, combo_counter, radius)
+    db_manager.insert(list(envs), fragments, combo_counter, radius)
 
 
-def upload_to_db(q, db_manager, radius, batch_size=10000):
-    batch = []
+def upload_to_db(q, db_manager, radius):
     while True:
         data = q.get()
         if data is None:
-            if batch:
-                batch_insert_db(batch, db_manager, radius)
             break
-        batch.append(data)
-        if len(batch) >= batch_size:
-            batch_insert_db(batch, db_manager, radius)
-            batch = []
+        batch_insert_db(data, db_manager, radius)
 
 
 def fragment_mols(args):
     db_manager = create_db_manager(args.db_type)
     q = Queue()
-    t = Thread(target=upload_to_db, args=(q, db_manager, args.radius, args.batch_size))
+    t = Thread(target=upload_to_db, args=(q, db_manager, args.radius))
     t.start()
     if args.debug:
         with open(args.out, "w") as f_output:

@@ -91,11 +91,9 @@ class PostGresManager(DBManager):
             print(f"Error creating tables: {e}")
             raise Exception(f"Error creating tables: {e}")
 
-
     def connect_db(self):
         self.conn = psycopg2.connect(**self.conn_params)
         self.cursor = self.conn.cursor()
 
     def insert_new_fragment(self, fragments):
         core_smis = list(fragments.keys())
-

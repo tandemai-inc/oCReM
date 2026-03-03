@@ -2,8 +2,6 @@
 # -*- coding:utf-8 -*-
 
 
-
-
 def create_db_manager(db_type):
     if db_type == "sqlite":
         from ta_gen.db.sqlite3_manager import SqliteManager

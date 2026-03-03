@@ -3,13 +3,14 @@
 
 
 import sqlite3
+import traceback
 
 from ta_gen.db.db_manager import DBManager
 
 
 class SqliteManager(DBManager):
 
-    def __init__(self, db_path="'sqlite:///ocrem.db'"):
+    def __init__(self, db_path="ocrem.db"):
         super().__init__()
         self.db_path = db_path
         self.create_db(db_path)
@@ -74,6 +75,30 @@ class SqliteManager(DBManager):
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.cursor = self.conn.cursor()
 
+    def insert_new_env(self, envs, radius):
+        placeholders = ",".join(["?"] * len(envs))
+        self.cursor.execute(
+            f"SELECT name, id FROM env WHERE name IN ({placeholders})", envs
+        )
+        env_map = {row[0]: row[1] for row in self.cursor.fetchall()}
+        missing_envs = [name for name in envs if name not in env_map]
+
+        if missing_envs:
+            # insert new env
+            self.cursor.executemany(
+                "INSERT INTO env (name, radis) VALUES (?, ?)",
+                [(name, radius) for name in missing_envs],
+            )
+            # get new ids
+            self.cursor.execute(
+                f"SELECT name, id FROM env WHERE name IN ({','.join(['?'] * len(missing_envs))})",
+                missing_envs,
+            )
+            for row in self.cursor.fetchall():
+                env_map[row[0]] = row[1]
+
+        return env_map
+
     def insert_new_fragment(self, fragments):
         core_smis = list(fragments.keys())
         placeholders = ",".join(["?"] * len(core_smis))
@@ -103,34 +128,10 @@ class SqliteManager(DBManager):
 
         return fragment_map
 
-    def insert_new_env(self, envs, radius):
-        placeholders = ",".join(["?"] * len(envs))
-        self.cursor.execute(
-            f"SELECT name, id FROM env WHERE name IN ({placeholders})", envs
-        )
-        env_map = {row[0]: row[1] for row in self.cursor.fetchall()}
-        missing_envs = [name for name in envs if name not in env_map]
-
-        if missing_envs:
-            # insert new env
-            self.cursor.executemany(
-                "INSERT INTO env (name, radis) VALUES (?, ?)",
-                [(name, radius) for name in missing_envs],
-            )
-            # get new ids
-            self.cursor.execute(
-                f"SELECT name, id FROM env WHERE name IN ({','.join(['?'] * len(missing_envs))})",
-                missing_envs,
-            )
-            for row in self.cursor.fetchall():
-                env_map[row[0]] = row[1]
-
-        return env_map
-
     def insert_env_fragment(self, env_fragment_counter, fragment_ids, env_ids):
         upsert_data = [
-            (fragment_ids[core_smi], env_ids[env], count)
-            for (core_smi, env), count in env_fragment_counter.items()
+            (env_ids[env], fragment_ids[core_smi], count)
+            for (env, core_smi), count in env_fragment_counter.items()
         ]
         upsert_sql = """
             INSERT INTO env_fragment (env_id, fragment_id, frequency)
@@ -140,16 +141,16 @@ class SqliteManager(DBManager):
         """
         self.cursor.executemany(upsert_sql, upsert_data)
 
-
-    def insert(self, fragments, envs, env_fragment_counter, radius):
+    def insert(self, envs, fragments, env_fragment_counter, radius):
         self.connect_db()
         try:
-            fragment_ids = self.insert_new_fragment(fragments)
-            env_ids = self.insert_new_env(envs, radius)
-            self.insert_env_fragment(env_fragment_counter, fragment_ids, env_ids)
-            self.conn.commit()
-        except:
-             self.conn.rollback()
+            with self.conn:
+                env_ids = self.insert_new_env(envs, radius)
+                fragment_ids = self.insert_new_fragment(fragments)
+                self.insert_env_fragment(env_fragment_counter, fragment_ids, env_ids)
+                self.conn.commit()
+        except Exception as e:
+            traceback.print_exc()
         finally:
             self.close()
 
