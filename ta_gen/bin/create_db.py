@@ -106,6 +106,20 @@ def schema_parser():
         choices=["sqlite", "postgres"],
         help="database type. Default: sqlite.",
     )
+    group.add_argument(
+        "--db_path",
+        metavar="STRING",
+        required=False,
+        default="ocrem.db",
+        help="database path. Default: :memory: (in-memory database).",
+    )
+    group.add_argument(
+        "--ini_file",
+        metavar="STRING",
+        required=False,
+        default=None,
+        help="postgresql ini file. Default: None.",
+    )
     return parser
 
 
@@ -293,7 +307,7 @@ def upload_to_db(q, db_manager, radius):
 
 
 def fragment_mols(args):
-    db_manager = create_db_manager(args.db_type)
+    db_manager = create_db_manager(args.db_type, args.db_path, args.ini_file)
     q = Queue()
     t = Thread(target=upload_to_db, args=(q, db_manager, args.radius))
     t.start()
