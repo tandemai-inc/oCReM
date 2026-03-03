@@ -2,6 +2,8 @@
 # -*- coding:utf-8 -*-
 
 import argparse
+from functools import partial
+
 import pandas as pd
 import os
 from multiprocessing import Pool, cpu_count
@@ -9,6 +11,9 @@ from rdkit import Chem
 import sys
 from rdkit.Chem import rdMMPA
 import csv
+from itertools import permutations
+from ta_gen.utils.mol_context import get_std_context_core_permutations
+
 
 def schema_parser():
     parser = argparse.ArgumentParser(description="Create database")
@@ -25,6 +30,15 @@ def schema_parser():
                         choices=[0, 1, 2], type=int,
                         help='fragmentation mode: 0 - all atoms constitute a fragment, 1- heavy atoms only, '
                              '2 - hydrogen atoms only. Default: 0.')
+
+    group = parser.add_argument_group('Fragment to Environment Parameters')
+    group.add_argument('--max_heavy_atoms', metavar='NUMBER', required=False, default=20,
+                        help='maximum number of heavy atoms in cores. If the number of atoms exceeds the limit '
+                             'fragment will be discarded. Default: 20.')
+    parser.add_argument('--radius', metavar='NUMBER', required=False, default=1,
+                        help='radius of molecular context (in bonds) which will be taken into account. Default: 1.')
+    parser.add_argument('--keep_stereo', action='store_true', default=False,
+                        help='set this flag if you want to keep stereo in context and core parts.')
     return parser
 
 
@@ -35,20 +49,50 @@ def parse_args():
 
 
 def read_chunks(input_file, chunk_size, sep):
-    input_file = args.input_file
     _, ext = os.path.splitext(input_file)
     if ext == ".csv":
-        chunks = pd.read_csv(input_file, sep=args.sep, chunksize=args.chunk_size)
+        chunks = pd.read_csv(input_file, sep=sep, chunksize=chunk_size)
     elif ext == ".smi":
-        chunks = pd.read_csv(input_file, header=None, names=["smiles", "smi_id"], sep=args.sep,
-                             chunksize=args.chunk_size)
+        chunks = pd.read_csv(input_file, header=None, names=["smiles", "smi_id"], sep=sep,na_filter=False,
+                             chunksize=chunk_size)
     else:
-        chunks = pd.read_csv(input_file, header=None, names=["smiles", "smi_id"], sep=args.sep,
-                             chunksize=args.chunk_size)
+        chunks = pd.read_csv(input_file, header=None, names=["smiles", "smi_id"], sep=sep,na_filter=False,
+                             chunksize=chunk_size)
     return chunks
 
 
-def __fragment_mol_heavy_atoms(df):
+def frag_to_env(smi, core, contexts, max_heavy_atoms, radius, keep_stereo):
+    if not core and not contexts:
+        return None
+
+    if not core:  # one split
+        residues = contexts.split('.')
+        if len(residues) == 2:
+            for context, core in permutations(residues, 2):
+                if context == '[H][*:1]':  # ignore such cases
+                    continue
+
+                mm = Chem.MolFromSmiles(core, sanitize=False)
+                num_heavy_atoms = mm.GetNumHeavyAtoms() if mm else float('inf')
+                if num_heavy_atoms <= max_heavy_atoms:
+                    env, cores = get_std_context_core_permutations(context, core, radius, keep_stereo)
+                    if env and cores:
+                        return env, cores[0], num_heavy_atoms
+        else:
+            sys.stderr.write(f'more than two fragments in context ({contexts}) where core is empty for smiles: {smi}')
+            sys.stderr.flush()
+    else:  # two or more splits
+        mm = Chem.MolFromSmiles(core, sanitize=False)
+        num_heavy_atoms = mm.GetNumHeavyAtoms() if mm else float('inf')
+        if num_heavy_atoms <= max_heavy_atoms:
+            env, cores = get_std_context_core_permutations(contexts, core, radius, keep_stereo)
+            if env and cores:
+                return env, cores[0], num_heavy_atoms
+
+    return None
+
+
+def __fragment_mol_heavy_atoms(df, max_heavy_atoms, radius, keep_stereo):
     results = []
     for smi, smi_id in df[["smiles", "smi_id"]].values:
         mol = Chem.MolFromSmiles(smi)
@@ -62,11 +106,15 @@ def __fragment_mol_heavy_atoms(df):
         frags += rdMMPA.FragmentMol(mol, pattern="[!#1]!@!=!#[!#1]", maxCuts=3,
                                     resultsAsMols=False, maxCutBonds=30)
         frags = set(frags)
-        results.extend([(smi, smi_id, core, chains) for core, chains in frags])
+        for core, chains in frags:
+            env_results = frag_to_env(smi, core, chains, max_heavy_atoms, radius, keep_stereo)
+            if env_results is not None:
+                env, cores, num_heavy_atoms = env_results
+                results.append((smi, smi_id, core, chains, env, cores,num_heavy_atoms))
     return results
 
 
-def __fragment_mol_hydrogen(df):
+def __fragment_mol_hydrogen(df, max_heavy_atoms, radius, keep_stereo):
     results = []
     for smi, smi_id in df[["smiles", "smi_id"]].values:
         mol = Chem.MolFromSmiles(smi)
@@ -78,9 +126,12 @@ def __fragment_mol_hydrogen(df):
         mol = Chem.AddHs(mol)
         n = mol.GetNumAtoms() - mol.GetNumHeavyAtoms()
         if n < 60:
-            frags = rdMMPA.FragmentMol(mol, pattern="[#1]!@!=!#[!#1]", maxCuts=1,
-                                       resultsAsMols=False, maxCutBonds=100)
-            results.extend([(smi, smi_id, core, chains) for core, chains in frags])
+            frags = rdMMPA.FragmentMol(mol, pattern="[#1]!@!=!#[!#1]", maxCuts=1, resultsAsMols=False, maxCutBonds=100)
+            for core, chains in frags:
+                env_results = frag_to_env(smi, core, chains, max_heavy_atoms, radius, keep_stereo)
+                if env_results is not None:
+                    env, cores, num_heavy_atoms = env_results
+                    results.append((smi, smi_id, core, chains, env, cores, num_heavy_atoms))
     return results
 
 def fragment_mols(args):
@@ -93,7 +144,8 @@ def fragment_mols(args):
             if args.mode in [0, 1]:
                 chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
                 with Pool(args.ncpu) as p:
-                    frags_heavy_atoms = p.imap_unordered(__fragment_mol_heavy_atoms, chunks)
+                    __fragment_mol = partial(__fragment_mol_heavy_atoms, max_heavy_atoms=args.max_heavy_atoms, radius=args.radius, keep_stereo=args.keep_stereo)
+                    frags_heavy_atoms = p.imap_unordered(__fragment_mol, chunks)
                     for frag in frags_heavy_atoms:
                         if frag is None:
                             continue
@@ -101,7 +153,8 @@ def fragment_mols(args):
             if args.mode in [1, 2]:
                 chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
                 with Pool(args.ncpu) as p:
-                    frags_hydrogen = p.imap_unordered(__fragment_mol_hydrogen, chunks)
+                    __fragment_mol = partial(__fragment_mol_hydrogen, max_heavy_atoms=args.max_heavy_atoms, radius=args.radius, keep_stereo=args.keep_stereo)
+                    frags_hydrogen = p.imap_unordered(__fragment_mol, chunks)
                     for frag in frags_hydrogen:
                         if frag is None:
                             continue
