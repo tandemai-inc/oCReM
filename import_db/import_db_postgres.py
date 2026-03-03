@@ -53,8 +53,7 @@ def create_db(conn_params):
         cursor.execute("DROP TABLE IF EXISTS fragment")
 
         # Create env table with correct structure
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE env (
                 id BIGINT,
                 name TEXT,
@@ -64,12 +63,10 @@ def create_db(conn_params):
                 surechem BIGINT,
                 zinc BIGINT
             )
-        """
-        )
+        """)
 
         # Create fragment table with correct structure
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE fragment (
                 id BIGINT,
                 core_smi TEXT,
@@ -77,18 +74,15 @@ def create_db(conn_params):
                 core_sma TEXT,
                 dist2 BIGINT
             )
-        """
-        )
+        """)
 
         # Create env_fragment table with correct structure
-        cursor.execute(
-            """
+        cursor.execute("""
             CREATE TABLE env_fragment (
                 env_id BIGINT,
                 fragment_id BIGINT
             )
-        """
-        )
+        """)
 
         conn.commit()
         cursor.close()

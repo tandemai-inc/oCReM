@@ -36,8 +36,7 @@ class PostgresExporter:
         ddl_file = os.path.join(self.export_dir, "schema_ddl.sql")
 
         # 1. export all table ddl (including primary keys, foreign keys, constraints)
-        self.cur.execute(
-            """
+        self.cur.execute("""
             SELECT 
                 'CREATE TABLE ' || schemaname || '.' || tablename || ' (' ||
                 string_agg(column_definition, ', ') || 
@@ -67,8 +66,7 @@ class PostgresExporter:
                 ORDER BY c.table_schema, c.table_name, c.ordinal_position
             ) t
             GROUP BY schemaname, tablename, constraint_definition;
-        """
-        )
+        """)
 
         with open(ddl_file, "w", encoding="utf-8") as f:
             # write table ddl
@@ -119,8 +117,7 @@ class PostgresExporter:
         """export foreign key constraints"""
         fk_file = os.path.join(self.export_dir, "foreign_keys.sql")
 
-        self.cur.execute(
-            """
+        self.cur.execute("""
             SELECT
                 tc.table_schema,
                 tc.table_name,
@@ -135,8 +132,7 @@ class PostgresExporter:
             JOIN information_schema.constraint_column_usage AS ccu
                 ON ccu.constraint_name = tc.constraint_name
             WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_schema = 'public';
-        """
-        )
+        """)
 
         fks = self.cur.fetchall()
 
@@ -155,16 +151,14 @@ class PostgresExporter:
         """export sequences"""
         seq_file = os.path.join(self.export_dir, "sequences.sql")
 
-        self.cur.execute(
-            """
+        self.cur.execute("""
             SELECT 
                 schemaname, sequencename, 
                 start_value, minimum_value, maximum_value,
                 increment, cycle_option
             FROM information_schema.sequences
             WHERE schemaname = 'public';
-        """
-        )
+        """)
 
         sequences = self.cur.fetchall()
 
@@ -204,15 +198,13 @@ class PostgresExporter:
         self.export_schema_ddl()
 
         # 2. export all table data
-        self.cur.execute(
-            """
+        self.cur.execute("""
             SELECT table_name 
             FROM information_schema.tables 
             WHERE table_schema = 'public' 
             AND table_type = 'BASE TABLE'
             ORDER BY table_name;
-        """
-        )
+        """)
 
         tables = [row["table_name"] for row in self.cur.fetchall()]
         print(f"found {len(tables)} tables")
