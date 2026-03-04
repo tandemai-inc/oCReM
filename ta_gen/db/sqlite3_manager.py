@@ -10,9 +10,11 @@ from ta_gen.db.db_manager import DBManager
 
 class SqliteManager(DBManager):
 
-    def __init__(self, db_path="ocrem.db"):
+    def __init__(self, db_path="ocrem.db", reset_db=False):
         super().__init__()
         self.db_path = db_path
+        if reset_db:
+            self.clear_db(db_path)
         self.create_db(db_path)
 
     def create_db(self, db_path):
@@ -62,6 +64,24 @@ class SqliteManager(DBManager):
             conn.commit()
             print("all tables created successfully (or already exist)")
 
+        except sqlite3.Error as e:
+            print(f"database error: {e}")
+            conn.rollback()
+        finally:
+            conn.close()
+
+    def clear_db(self, db_path):
+        """clear database"""
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        try:
+            cursor.execute("DELETE FROM env_fragment")
+            cursor.execute("DELETE FROM fragment")
+            cursor.execute("DELETE FROM env")
+
+            conn.commit()
+            print("all tables cleared successfully")
         except sqlite3.Error as e:
             print(f"database error: {e}")
             conn.rollback()

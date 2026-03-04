@@ -20,11 +20,14 @@ def load_ini(ini_file):
 
 class PostGresManager(DBManager):
 
-    def __init__(self, ini_file):
+    def __init__(self, ini_file, reset_db=False):
         super().__init__()
         self.conn_params = load_ini(ini_file)
+        if reset_db:
+            self.clear_db()
+        self.create_db()
 
-    def create_db(self, ini_file):
+    def create_db(self):
         # create database
         try:
             default_db_config = copy.deepcopy(self.conn_params)
@@ -60,7 +63,7 @@ class PostGresManager(DBManager):
             # Create env table with correct structure
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS env (
-                    id BIGINT PRIMARY KEY,
+                    id BIGSERIAL PRIMARY KEY,
                     name TEXT UNIQUE NOT NULL,
                     radis SMALLINT
                 )
@@ -69,7 +72,7 @@ class PostGresManager(DBManager):
             # Create fragment table with correct structure
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS fragment (
-                    id BIGINT PRIMARY KEY,
+                    id BIGSERIAL PRIMARY KEY,
                     core_smi TEXT UNIQUE NOT NULL,
                     core_num_atoms INTEGER,
                     dist2 BIGINT
@@ -97,6 +100,22 @@ class PostGresManager(DBManager):
         except Exception as e:
             print(f"Error creating tables: {e}")
             raise Exception(f"Error creating tables: {e}")
+
+    def clear_db(self):
+        try:
+            conn = psycopg2.connect(**self.conn_params)
+            cursor = conn.cursor()
+
+            cursor.execute("TRUNCATE TABLE env_fragment CASCADE")
+            cursor.execute("TRUNCATE TABLE fragment CASCADE")
+            cursor.execute("TRUNCATE TABLE env CASCADE")
+
+            conn.commit()
+            cursor.close()
+            conn.close()
+        except Exception as e:
+            print(f"Error clearing tables: {e}")
+            raise Exception(f"Error clearing tables: {e}")
 
     def connect_db(self):
         self.conn = psycopg2.connect(**self.conn_params)
@@ -162,7 +181,6 @@ class PostGresManager(DBManager):
             frequency = env_fragment.frequency + EXCLUDED.frequency
         """
         self.cursor.executemany(upsert_sql, upsert_data)
-
 
     def insert(self, envs, fragments, env_fragment_counter, radius):
         self.connect_db()

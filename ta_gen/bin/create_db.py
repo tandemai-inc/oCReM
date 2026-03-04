@@ -120,6 +120,12 @@ def schema_parser():
         default=None,
         help="postgresql ini file. Default: None.",
     )
+    group.add_argument(
+        "--reset_db",
+        action="store_true",
+        default=False,
+        help="set this flag if you want to reset the database.",
+    )
     return parser
 
 
@@ -166,7 +172,7 @@ def calc_mp(env, core):
         dist2 = mat[ids[0], ids[1]]
     else:
         dist2 = 0
-    return sma, dist2
+    return sma, int(dist2)
 
 
 def frag_to_env(smi, core, contexts, max_heavy_atoms, radius, keep_stereo):
@@ -307,7 +313,7 @@ def upload_to_db(q, db_manager, radius):
 
 
 def fragment_mols(args):
-    db_manager = create_db_manager(args.db_type, args.db_path, args.ini_file)
+    db_manager = create_db_manager(args.db_type, args.db_path, args.ini_file, args.reset_db)
     q = Queue()
     t = Thread(target=upload_to_db, args=(q, db_manager, args.radius))
     t.start()
