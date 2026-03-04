@@ -4,6 +4,7 @@
 import argparse
 import csv
 import os
+import subprocess
 import sys
 from collections import Counter
 from functools import partial
@@ -15,12 +16,11 @@ from threading import Thread
 import pandas as pd
 from rdkit import Chem
 from rdkit.Chem import rdMMPA
+from tqdm import tqdm
 
 from ta_gen.db import create_db_manager
 from ta_gen.utils.mol_context import (combine_core_env_to_rxn_smarts,
                                       get_std_context_core_permutations)
-from tqdm import tqdm
-import subprocess
 
 
 def schema_parser():
@@ -145,14 +145,16 @@ def preprocess_input_file(input_file):
     os.system(f"sort -u {input_file} -o {output_file}")
     return output_file
 
+
 def count_total_rows(input_file):
     """Count total number of rows in input file using wc -l"""
-    result = subprocess.run(['wc', '-l', input_file], capture_output=True, text=True)
+    result = subprocess.run(["wc", "-l", input_file], capture_output=True, text=True)
     total_rows = int(result.stdout.split()[0])
     _, ext = os.path.splitext(input_file)
     if ext == ".csv":
         total_rows -= 1
     return total_rows
+
 
 def read_chunks(input_file, chunk_size, sep):
     _, ext = os.path.splitext(input_file)
@@ -324,12 +326,6 @@ def batch_insert_db(data, db_manager, radius):
 
 
 def upload_to_db(q, db_manager, radius, total_chunks):
-    while True:
-        data = q.get()
-        if data is None:
-            break
-        batch_insert_db(data, db_manager, radius)
-
     with tqdm(total=total_chunks, desc="Uploading to database") as pbar:
         while True:
             data = q.get()
@@ -343,7 +339,9 @@ def fragment_mols(args):
     # remove duplicated smiles
     args.input_file = preprocess_input_file(args.input_file)
     # create db manager
-    db_manager = create_db_manager(args.db_type, args.db_path, args.ini_file, args.reset_db)
+    db_manager = create_db_manager(
+        args.db_type, args.db_path, args.ini_file, args.reset_db
+    )
     total_rows = count_total_rows(args.input_file)
     print(f"Start import {total_rows} rows to {args.db_type}")
     total_chunks = total_rows // args.chunk_size + 1

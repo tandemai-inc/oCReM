@@ -23,9 +23,35 @@ class PostGresManager(DBManager):
     def __init__(self, ini_file, reset_db=False):
         super().__init__()
         self.conn_params = load_ini(ini_file)
-        if reset_db:
+        db_exists = self.db_exist()
+        if db_exists and reset_db:
             self.clear_db()
         self.create_db()
+
+    def db_exist(self):
+        # check if db already exists
+        try:
+            default_db_config = copy.deepcopy(self.conn_params)
+            db_name = self.conn_params["database"]
+            default_db_config["user"] = "postgres"
+            default_db_config["database"] = "postgres"
+
+            conn = psycopg2.connect(**default_db_config)
+            conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+            cursor = conn.cursor()
+
+            # check if db already exists
+            cursor.execute(f"SELECT 1 FROM pg_database WHERE datname = '{db_name}'")
+            exists = cursor.fetchone()
+            cursor.close()
+            conn.close()
+
+            if not exists:
+                return False
+            else:
+                return True
+        except Exception as e:
+            raise Exception(f"Error checking database existence: {e}")
 
     def create_db(self):
         # create database
@@ -90,9 +116,11 @@ class PostGresManager(DBManager):
             """)
 
             cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_env_fragment_env_id ON env_fragment(env_id)")
+                "CREATE INDEX IF NOT EXISTS idx_env_fragment_env_id ON env_fragment(env_id)"
+            )
             cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_env_fragment_fragment_id ON env_fragment(fragment_id)")
+                "CREATE INDEX IF NOT EXISTS idx_env_fragment_fragment_id ON env_fragment(fragment_id)"
+            )
 
             conn.commit()
             cursor.close()
@@ -123,10 +151,9 @@ class PostGresManager(DBManager):
         self.cursor = self.conn.cursor()
 
     def insert_new_env(self, envs, radius):
-        placeholders = ','.join(['%s'] * len(envs))
+        placeholders = ",".join(["%s"] * len(envs))
         self.cursor.execute(
-            f"SELECT name, id FROM env WHERE name IN ({placeholders})",
-            envs
+            f"SELECT name, id FROM env WHERE name IN ({placeholders})", envs
         )
         env_map = {row[0]: row[1] for row in self.cursor.fetchall()}
         missing = [name for name in envs if name not in env_map]
@@ -134,11 +161,11 @@ class PostGresManager(DBManager):
         if missing:
             self.cursor.executemany(
                 "INSERT INTO env (name, radis) VALUES (%s, %s)",
-                [(name, radius) for name in missing]
+                [(name, radius) for name in missing],
             )
             self.cursor.execute(
                 f"SELECT name, id FROM env WHERE name IN ({','.join(['%s'] * len(missing))})",
-                missing
+                missing,
             )
             for row in self.cursor.fetchall():
                 env_map[row[0]] = row[1]
@@ -147,10 +174,10 @@ class PostGresManager(DBManager):
 
     def insert_new_fragment(self, fragments):
         core_smis = list(fragments.keys())
-        placeholders = ','.join(['%s'] * len(core_smis))
+        placeholders = ",".join(["%s"] * len(core_smis))
         self.cursor.execute(
             f"SELECT core_smi, id FROM fragment WHERE core_smi IN ({placeholders})",
-            core_smis
+            core_smis,
         )
         fragment_map = {row[0]: row[1] for row in self.cursor.fetchall()}
         missing = [name for name in core_smis if name not in fragment_map]
@@ -158,11 +185,11 @@ class PostGresManager(DBManager):
             data = [(name, fragments[name][0], fragments[name][1]) for name in missing]
             self.cursor.executemany(
                 "INSERT INTO fragment (core_smi, core_num_atoms, dist2) VALUES (%s, %s, %s)",
-                data
+                data,
             )
             self.cursor.execute(
                 f"SELECT core_smi, id FROM fragment WHERE core_smi IN ({','.join(['%s'] * len(missing))})",
-                missing
+                missing,
             )
             for row in self.cursor.fetchall():
                 fragment_map[row[0]] = row[1]
