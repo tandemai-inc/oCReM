@@ -19,6 +19,8 @@ from rdkit.Chem import rdMMPA
 from ta_gen.db import create_db_manager
 from ta_gen.utils.mol_context import (combine_core_env_to_rxn_smarts,
                                       get_std_context_core_permutations)
+from tqdm import tqdm
+import subprocess
 
 
 def schema_parser():
@@ -134,6 +136,15 @@ def parse_args():
     args, _ = parser.parse_known_args()
     return args
 
+
+def count_total_rows(input_file):
+    """Count total number of rows in input file using wc -l"""
+    result = subprocess.run(['wc', '-l', input_file], capture_output=True, text=True)
+    total_rows = int(result.stdout.split()[0])
+    _, ext = os.path.splitext(input_file)
+    if ext == ".csv":
+        total_rows -= 1
+    return total_rows
 
 def read_chunks(input_file, chunk_size, sep):
     _, ext = os.path.splitext(input_file)
@@ -304,18 +315,32 @@ def batch_insert_db(data, db_manager, radius):
     db_manager.insert(list(envs), fragments, combo_counter, radius)
 
 
-def upload_to_db(q, db_manager, radius):
+def upload_to_db(q, db_manager, radius, total_chunks):
     while True:
         data = q.get()
         if data is None:
             break
         batch_insert_db(data, db_manager, radius)
 
+    with tqdm(total=total_chunks, desc="Uploading to database") as pbar:
+        while True:
+            data = q.get()
+            if data is None:
+                break
+            batch_insert_db(data, db_manager, radius)
+            pbar.update(1)
+
+
 
 def fragment_mols(args):
     db_manager = create_db_manager(args.db_type, args.db_path, args.ini_file, args.reset_db)
+    total_rows = count_total_rows(args.input_file)
+    print(f"Start import {total_rows} to {args.db_type}")
+    total_chunks = total_rows // args.chunk_size + 1
+    if args.mode == 1:
+        total_chunks *= 2
     q = Queue()
-    t = Thread(target=upload_to_db, args=(q, db_manager, args.radius))
+    t = Thread(target=upload_to_db, args=(q, db_manager, args.radius, total_chunks))
     t.start()
     if args.debug:
         with open(args.out, "w") as f_output:
@@ -336,6 +361,7 @@ def fragment_mols(args):
                 ]
             )
             if args.mode in [0, 1]:
+                print(f"Start fragment heavy atoms")
                 chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
                 with Pool(args.ncpu) as p:
                     __fragment_mol = partial(
@@ -351,6 +377,7 @@ def fragment_mols(args):
                         q.put(frag)
                         csv_writer.writerows(frag)
             if args.mode in [1, 2]:
+                print(f"Start fragment hydrogen atoms")
                 chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
                 with Pool(args.ncpu) as p:
                     __fragment_mol = partial(
@@ -367,6 +394,7 @@ def fragment_mols(args):
                         csv_writer.writerows(frag)
     else:
         if args.mode in [0, 1]:
+            print(f"Start fragment heavy atoms")
             chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
             __fragment_mol = partial(
                 __fragment_mol_heavy_atoms,
@@ -381,6 +409,7 @@ def fragment_mols(args):
                         continue
                     q.put(frag)
         if args.mode in [1, 2]:
+            print(f"Start fragment hydrogen atoms")
             chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
             __fragment_mol = partial(
                 __fragment_mol_hydrogen,
@@ -397,6 +426,7 @@ def fragment_mols(args):
 
     q.put(None)
     t.join()
+    print(f"finished uploading {args.input_file} to {args.db_type} database")
 
 
 def create_db(args):

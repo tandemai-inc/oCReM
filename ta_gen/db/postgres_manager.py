@@ -102,6 +102,7 @@ class PostGresManager(DBManager):
             raise Exception(f"Error creating tables: {e}")
 
     def clear_db(self):
+        print(f"clearing database {self.conn_params['database']}")
         try:
             conn = psycopg2.connect(**self.conn_params)
             cursor = conn.cursor()

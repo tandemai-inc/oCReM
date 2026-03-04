@@ -72,6 +72,7 @@ class SqliteManager(DBManager):
 
     def clear_db(self, db_path):
         """clear database"""
+        print(f"clearing database {db_path}")
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
 
