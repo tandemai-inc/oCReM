@@ -317,9 +317,9 @@ def batch_insert_db(data, db_manager, radius):
     fragments = {}
     combo_counter = Counter()
     for row in data:
-        smi, smi_id, core, chains, env, core_smi, num_heavy_atoms, sma, dist2 = row
+        smi, smi_id, core, chains, env, core_smi, num_heavy_atoms, core_sma, dist2 = row
         envs.add(env)
-        fragments.update({core_smi: (num_heavy_atoms, dist2)})
+        fragments.update({core_smi: (num_heavy_atoms, core_sma, dist2)})
         combo_counter[(env, core_smi)] += 1
 
     db_manager.insert(list(envs), fragments, combo_counter, radius)

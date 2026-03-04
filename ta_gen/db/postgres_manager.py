@@ -101,6 +101,7 @@ class PostGresManager(DBManager):
                     id BIGSERIAL PRIMARY KEY,
                     core_smi TEXT UNIQUE NOT NULL,
                     core_num_atoms INTEGER,
+                    core_sma TEXT,
                     dist2 BIGINT
                 )
             """)
@@ -184,7 +185,7 @@ class PostGresManager(DBManager):
         if missing:
             data = [(name, fragments[name][0], fragments[name][1]) for name in missing]
             self.cursor.executemany(
-                "INSERT INTO fragment (core_smi, core_num_atoms, dist2) VALUES (%s, %s, %s)",
+                "INSERT INTO fragment (core_smi, core_num_atoms, core_sma, dist2) VALUES (%s, %s, %s, %s)",
                 data,
             )
             self.cursor.execute(

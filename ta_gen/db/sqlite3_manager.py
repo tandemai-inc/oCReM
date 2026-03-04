@@ -39,6 +39,7 @@ class SqliteManager(DBManager):
                         id INTEGER PRIMARY KEY,
                         core_smi TEXT UNIQUE,
                         core_num_atoms INTEGER,  
+                        core_sma TEXT,
                         dist2 INTEGER
                     )
                 """)
@@ -133,9 +134,9 @@ class SqliteManager(DBManager):
         if missing_fragments:
             # insert new fragment
             self.cursor.executemany(
-                "INSERT INTO fragment (core_smi, core_num_atoms, dist2) VALUES (?, ?, ?)",
+                "INSERT INTO fragment (core_smi, core_num_atoms, core_sma, dist2) VALUES (?, ?, ?, ?)",
                 [
-                    (name, fragments.get(name)[0], fragments.get(name)[1])
+                    (name, fragments.get(name)[0], fragments.get(name)[1], fragments.get(name)[2])
                     for name in missing_fragments
                 ],
             )
@@ -170,6 +171,17 @@ class SqliteManager(DBManager):
                 fragment_ids = self.insert_new_fragment(fragments)
                 self.insert_env_fragment(env_fragment_counter, fragment_ids, env_ids)
                 self.conn.commit()
+        except Exception as e:
+            traceback.print_exc()
+        finally:
+            self.close()
+
+    def execute(self, sql):
+        self.connect_db()
+        try:
+            with self.conn:
+                self.cursor.execute(sql)
+                return self.cursor.fetchall()
         except Exception as e:
             traceback.print_exc()
         finally:

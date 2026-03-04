@@ -373,3 +373,14 @@ def combine_core_env_to_rxn_smarts(core, env, keep_h=True):
     if not keep_h:  # remove H only in mapped env part
         comb_sma = patt_remove_h.sub("", comb_sma)
     return comb_sma
+
+
+def get_canon_context_core(context, core, radius, keep_stereo=False):
+    # context and core are Mols or SMILES
+    # returns SMILES by default
+    res = get_std_context_core_permutations(context, core, radius, keep_stereo)
+    if res:
+        env, cores = res
+        return env, sorted(cores)[0]
+    else:
+        return None, None
