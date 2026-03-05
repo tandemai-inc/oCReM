@@ -183,7 +183,7 @@ class PostGresManager(DBManager):
         fragment_map = {row[0]: row[1] for row in self.cursor.fetchall()}
         missing = [name for name in core_smis if name not in fragment_map]
         if missing:
-            data = [(name, fragments[name][0]) for name in missing]
+            data = [(name, fragments[name]) for name in missing]
             self.cursor.executemany(
                 "INSERT INTO fragment (core_smi, core_num_atoms) VALUES (%s, %s)",
                 data,

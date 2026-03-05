@@ -38,7 +38,7 @@ class SqliteManager(DBManager):
                     CREATE TABLE IF NOT EXISTS fragment (
                         id INTEGER PRIMARY KEY,
                         core_smi TEXT UNIQUE,
-                        core_num_atoms INTEGER,  
+                        core_num_atoms INTEGER  
                     )
                 """)
 
@@ -135,7 +135,7 @@ class SqliteManager(DBManager):
             # insert new fragment
             self.cursor.executemany(
                 "INSERT INTO fragment (core_smi, core_num_atoms) VALUES (?, ?)",
-                [(name, fragments.get(name)[0]) for name in missing_fragments],
+                [(name, fragments.get(name)) for name in missing_fragments],
             )
             # get new ids
             self.cursor.execute(
