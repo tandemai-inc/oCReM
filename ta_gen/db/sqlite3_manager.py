@@ -181,6 +181,7 @@ class SqliteManager(DBManager):
                 return self.cursor.fetchall() or []
         except Exception as e:
             traceback.print_exc()
+            return []
         finally:
             self.close()
 

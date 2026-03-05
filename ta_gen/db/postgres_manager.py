@@ -100,7 +100,7 @@ class PostGresManager(DBManager):
                 CREATE TABLE IF NOT EXISTS fragment (
                     id BIGSERIAL PRIMARY KEY,
                     core_smi TEXT UNIQUE NOT NULL,
-                    core_num_atoms INTEGER,
+                    core_num_atoms INTEGER
                 )
             """)
 
@@ -136,9 +136,9 @@ class PostGresManager(DBManager):
             conn = psycopg2.connect(**self.conn_params)
             cursor = conn.cursor()
 
-            cursor.execute("DROP TABLE env_fragment CASCADE")
-            cursor.execute("DROP TABLE fragment CASCADE")
-            cursor.execute("DROP TABLE env CASCADE")
+            cursor.execute("DROP TABLE IF EXISTS env_fragment CASCADE")
+            cursor.execute("DROP TABLE IF EXISTS fragment CASCADE")
+            cursor.execute("DROP TABLE IF EXISTS env CASCADE")
 
             conn.commit()
             cursor.close()
@@ -221,6 +221,18 @@ class PostGresManager(DBManager):
                 self.conn.commit()
         except Exception as e:
             traceback.print_exc()
+        finally:
+            self.close()
+
+    def execute(self, sql):
+        self.connect_db()
+        try:
+            with self.conn:
+                self.cursor.execute(sql)
+                return self.cursor.fetchall() or []
+        except Exception as e:
+            traceback.print_exc()
+            return []
         finally:
             self.close()
 

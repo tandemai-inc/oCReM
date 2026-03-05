@@ -46,6 +46,7 @@ def schema_parser():
         metavar="NUMBER",
         required=False,
         default=1,
+        type=int,
         help="number of cpus used for computation. Default: 1.",
     )
     parser.add_argument(
@@ -142,7 +143,10 @@ def preprocess_input_file(input_file):
     # remove duplicated
     name, ext = os.path.splitext(input_file)
     output_file = f"{name}_deduped{ext}"
-    os.system(f"sort -u {input_file} -o {output_file}")
+    if ext == ".csv":
+        os.system(f'( head -n 1 "{input_file}"; tail -n +2 "{input_file}" | sort -u ) > "{output_file}"')
+    else:
+        os.system(f"sort -u {input_file} -o {output_file}")
     return output_file
 
 
@@ -219,7 +223,7 @@ def frag_to_env(smi, core, contexts, max_heavy_atoms, radius, keep_stereo):
                         results.append((env, cores[0], num_heavy_atoms, sma, dist2))
         else:
             sys.stderr.write(
-                f"more than two fragments in context ({contexts}) where core is empty for smiles: {smi}"
+                f"more than two fragments in context ({contexts}) where core is empty for smiles: {smi}\n"
             )
             sys.stderr.flush()
     else:  # two or more splits
