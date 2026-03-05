@@ -91,7 +91,7 @@ class PostGresManager(DBManager):
                 CREATE TABLE IF NOT EXISTS env (
                     id BIGSERIAL PRIMARY KEY,
                     name TEXT UNIQUE NOT NULL,
-                    radis SMALLINT
+                    radius SMALLINT
                 )
             """)
 
@@ -161,7 +161,7 @@ class PostGresManager(DBManager):
 
         if missing:
             self.cursor.executemany(
-                "INSERT INTO env (name, radis) VALUES (%s, %s)",
+                "INSERT INTO env (name, radius) VALUES (%s, %s)",
                 [(name, radius) for name in missing],
             )
             self.cursor.execute(

@@ -30,7 +30,7 @@ class SqliteManager(DBManager):
                     CREATE TABLE IF NOT EXISTS env (
                         id INTEGER PRIMARY KEY,  
                         name TEXT UNIQUE,
-                        radis INTEGER           
+                        radius INTEGER           
                     )
                 """)
 
@@ -108,7 +108,7 @@ class SqliteManager(DBManager):
         if missing_envs:
             # insert new env
             self.cursor.executemany(
-                "INSERT INTO env (name, radis) VALUES (?, ?)",
+                "INSERT INTO env (name, radius) VALUES (?, ?)",
                 [(name, radius) for name in missing_envs],
             )
             # get new ids
@@ -181,7 +181,7 @@ class SqliteManager(DBManager):
         try:
             with self.conn:
                 self.cursor.execute(sql)
-                return self.cursor.fetchall()
+                return self.cursor.fetchall() or []
         except Exception as e:
             traceback.print_exc()
         finally:

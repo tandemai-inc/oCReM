@@ -237,9 +237,10 @@ def get_std_context_core_permutations(context, core, radius, keep_stereo):
         tuple: A tuple containing the context environment SMILES string and a list of core fragment SMILES strings.
 
     """
-
-    context = Chem.MolFromSmiles(context)
-    core = Chem.MolFromSmiles(core)
+    if isinstance(context, str):
+        context = Chem.MolFromSmiles(context)
+    if isinstance(core, str):
+        core = Chem.MolFromSmiles(core)
 
     # remove Hs from context and core
     if (

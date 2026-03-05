@@ -340,7 +340,7 @@ def __get_replacements(
     condition = [
         f"e.name = '{env}'",
         f"e.radius = {radius}",
-        f"ef.frequency >= {min_freq}"
+        f"ef.frequency >= {min_freq}",
         f"f.core_num_atoms BETWEEN {min_atoms} AND {max_atoms}"
     ]
     if isinstance(dist, int):
