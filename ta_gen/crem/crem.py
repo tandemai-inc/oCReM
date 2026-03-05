@@ -344,19 +344,18 @@ def __get_replacements(
         f"f.core_num_atoms BETWEEN {min_atoms} AND {max_atoms}"
     ]
     if isinstance(dist, int):
-        condition.append(f"dist2 = {dist}")
+        condition.append(f"ef.dist2 = {dist}")
     elif isinstance(dist, tuple) and len(dist) == 2:
-        condition.append(f"dist2 BETWEEN {dist[0]} AND {dist[1]}")
+        condition.append(f"ef.dist2 BETWEEN {dist[0]} AND {dist[1]}")
 
     sql = f"""
-    SELECT f.core_smi, f.core_sma, ef.frequency
+    SELECT f.core_smi, ef.core_sma, ef.frequency
     FROM fragment f
     JOIN env_fragment ef ON f.id = ef.fragment_id
     JOIN env e ON ef.env_id = e.id
     WHERE {' AND '.join(condition)}
     """
     return set(db_manager.execute(sql))
-
 
 
 def __gen_replacements(
