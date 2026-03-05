@@ -358,13 +358,6 @@ def __get_replacements(
     return set(db_manager.execute(sql))
 
 
-def _get_replacements(db_cur, radius, row_ids):
-    sql = f"""SELECT rowid, core_smi, core_sma, freq
-              FROM radius{radius}
-              WHERE rowid IN ({','.join(map(str, row_ids))})"""
-    db_cur.execute(sql)
-    return db_cur.fetchall()
-
 
 def __gen_replacements(
     mol1,

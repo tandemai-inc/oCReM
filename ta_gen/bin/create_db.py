@@ -315,14 +315,21 @@ def __fragment_mol_hydrogen(df, max_heavy_atoms, radius, keep_stereo):
 def batch_insert_db(data, db_manager, radius):
     envs = set()
     fragments = {}
-    combo_counter = Counter()
+    env_fragment_combo = {}
     for row in data:
         smi, smi_id, core, chains, env, core_smi, num_heavy_atoms, core_sma, dist2 = row
         envs.add(env)
-        fragments.update({core_smi: (num_heavy_atoms, core_sma, dist2)})
-        combo_counter[(env, core_smi)] += 1
+        fragments.update({core_smi: num_heavy_atoms})
+        if (env, core_smi) in env_fragment_combo:
+            env_fragment_combo[(env, core_smi)]["freq"] += 1
+        else:
+            env_fragment_combo[(env, core_smi)] = {
+                "core_sma": core_sma,
+                "dist2": dist2,
+                "freq": 1,
+            }
 
-    db_manager.insert(list(envs), fragments, combo_counter, radius)
+    db_manager.insert(list(envs), fragments, env_fragment_combo, radius)
 
 
 def upload_to_db(q, db_manager, radius, total_chunks):

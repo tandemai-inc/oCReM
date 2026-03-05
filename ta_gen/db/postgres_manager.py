@@ -101,8 +101,6 @@ class PostGresManager(DBManager):
                     id BIGSERIAL PRIMARY KEY,
                     core_smi TEXT UNIQUE NOT NULL,
                     core_num_atoms INTEGER,
-                    core_sma TEXT,
-                    dist2 BIGINT
                 )
             """)
 
@@ -111,6 +109,8 @@ class PostGresManager(DBManager):
                 CREATE TABLE IF NOT EXISTS env_fragment (
                     env_id BIGINT REFERENCES env(id),
                     fragment_id BIGINT REFERENCES fragment(id),
+                    core_sma TEXT,
+                    dist2 SMALLINT,
                     frequency BIGINT,
                     PRIMARY KEY (env_id, fragment_id)
                 )
@@ -183,9 +183,9 @@ class PostGresManager(DBManager):
         fragment_map = {row[0]: row[1] for row in self.cursor.fetchall()}
         missing = [name for name in core_smis if name not in fragment_map]
         if missing:
-            data = [(name, fragments[name][0], fragments[name][1]) for name in missing]
+            data = [(name, fragments[name][0]) for name in missing]
             self.cursor.executemany(
-                "INSERT INTO fragment (core_smi, core_num_atoms, core_sma, dist2) VALUES (%s, %s, %s, %s)",
+                "INSERT INTO fragment (core_smi, core_num_atoms) VALUES (%s, %s)",
                 data,
             )
             self.cursor.execute(
@@ -197,27 +197,27 @@ class PostGresManager(DBManager):
 
         return fragment_map
 
-    def insert_env_fragment(self, env_fragment_counter, fragment_ids, env_ids):
+    def insert_env_fragment(self, env_fragment_combo, fragment_ids, env_ids):
         upsert_data = [
-            (env_ids[env], fragment_ids[core_smi], count)
-            for (env, core_smi), count in env_fragment_counter.items()
+            (env_ids[env], fragment_ids[core_smi], core_sma, dist2, freq)
+            for (env, core_smi), core_sma, dist2, freq in env_fragment_combo.items()
         ]
 
         upsert_sql = """
-            INSERT INTO env_fragment (env_id, fragment_id, frequency)
-            VALUES (%s, %s, %s)
+            INSERT INTO env_fragment (env_id, fragment_id, core_sma, dist2, frequency)
+            VALUES (%s, %s, %s, %s, %s)
             ON CONFLICT (env_id, fragment_id) DO UPDATE SET
             frequency = env_fragment.frequency + EXCLUDED.frequency
         """
         self.cursor.executemany(upsert_sql, upsert_data)
 
-    def insert(self, envs, fragments, env_fragment_counter, radius):
+    def insert(self, envs, fragments, env_fragment_combo, radius):
         self.connect_db()
         try:
             with self.conn:
                 env_ids = self.insert_new_env(envs, radius)
                 fragment_ids = self.insert_new_fragment(fragments)
-                self.insert_env_fragment(env_fragment_counter, fragment_ids, env_ids)
+                self.insert_env_fragment(env_fragment_combo, fragment_ids, env_ids)
                 self.conn.commit()
         except Exception as e:
             traceback.print_exc()
