@@ -78,9 +78,9 @@ class SqliteManager(DBManager):
         cursor = conn.cursor()
 
         try:
-            cursor.execute("DELETE FROM env_fragment")
-            cursor.execute("DELETE FROM fragment")
-            cursor.execute("DELETE FROM env")
+            cursor.execute("DROP TABLE IF EXISTS env_fragment")
+            cursor.execute("DROP TABLE IF EXISTS fragment")
+            cursor.execute("DROP TABLE IF EXISTS env")
 
             conn.commit()
             print("all tables cleared successfully")

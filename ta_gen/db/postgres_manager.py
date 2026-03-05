@@ -136,9 +136,9 @@ class PostGresManager(DBManager):
             conn = psycopg2.connect(**self.conn_params)
             cursor = conn.cursor()
 
-            cursor.execute("TRUNCATE TABLE env_fragment CASCADE")
-            cursor.execute("TRUNCATE TABLE fragment CASCADE")
-            cursor.execute("TRUNCATE TABLE env CASCADE")
+            cursor.execute("DROP TABLE env_fragment CASCADE")
+            cursor.execute("DROP TABLE fragment CASCADE")
+            cursor.execute("DROP TABLE env CASCADE")
 
             conn.commit()
             cursor.close()
