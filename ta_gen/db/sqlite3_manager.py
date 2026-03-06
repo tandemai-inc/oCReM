@@ -92,9 +92,12 @@ class SqliteManager(DBManager):
 
     def connect_db(self):
         """connect database"""
-        self.conn = sqlite3.connect(self.db_path)
+        self.conn = sqlite3.connect(self.db_path, timeout=10.0)
         # support foreign key
         self.conn.execute("PRAGMA foreign_keys = ON")
+        # turn on synchronous mode
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA synchronous=NORMAL")
         self.cursor = self.conn.cursor()
 
     def insert_new_env(self, envs, radius):
@@ -163,12 +166,14 @@ class SqliteManager(DBManager):
     def insert(self, envs, fragments, env_fragment_combo, radius):
         self.connect_db()
         try:
-            with self.conn:
-                env_ids = self.insert_new_env(envs, radius)
-                fragment_ids = self.insert_new_fragment(fragments)
-                self.insert_env_fragment(env_fragment_combo, fragment_ids, env_ids)
+            env_ids = self.insert_new_env(envs, radius)
+            fragment_ids = self.insert_new_fragment(fragments)
+            self.insert_env_fragment(env_fragment_combo, fragment_ids, env_ids)
+            self.conn.commit()
         except Exception as e:
             traceback.print_exc()
+            if self.conn:
+                self.conn.rollback()  # 出错回滚
         finally:
             self.close()
 
