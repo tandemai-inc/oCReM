@@ -173,7 +173,7 @@ class SqliteManager(DBManager):
         except Exception as e:
             traceback.print_exc()
             if self.conn:
-                self.conn.rollback()  # 出错回滚
+                self.conn.rollback()  # rollback
         finally:
             self.close()
 

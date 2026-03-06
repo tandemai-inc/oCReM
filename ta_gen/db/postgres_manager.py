@@ -5,9 +5,11 @@
 import configparser
 import copy
 import traceback
+import time
 
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+from psycopg2.errors import DeadlockDetected
 
 from ta_gen.db.db_manager import DBManager
 
@@ -85,6 +87,9 @@ class PostGresManager(DBManager):
         try:
             conn = psycopg2.connect(**self.conn_params)
             cursor = conn.cursor()
+
+            # lock for creating table
+            cursor.execute("SELECT pg_advisory_lock(123456789)")
 
             # Create env table with correct structure
             cursor.execute("""
@@ -212,16 +217,24 @@ class PostGresManager(DBManager):
         self.cursor.executemany(upsert_sql, upsert_data)
 
     def insert(self, envs, fragments, env_fragment_combo, radius):
-        self.connect_db()
-        try:
-            with self.conn:
-                env_ids = self.insert_new_env(envs, radius)
-                fragment_ids = self.insert_new_fragment(fragments)
-                self.insert_env_fragment(env_fragment_combo, fragment_ids, env_ids)
-        except Exception as e:
-            traceback.print_exc()
-        finally:
-            self.close()
+        max_retries = 10
+        retries = 0
+        while retries <= max_retries:
+            self.connect_db()
+            try:
+                with self.conn:
+                    env_ids = self.insert_new_env(envs, radius)
+                    fragment_ids = self.insert_new_fragment(fragments)
+                    self.insert_env_fragment(env_fragment_combo, fragment_ids, env_ids)
+            except DeadlockDetected as e:
+                print("Deadlock occur")
+                retries += 1
+                time.sleep(0.5 * retries)
+            except Exception as e:
+                print(f"e: {e}")
+                traceback.print_exc()
+            finally:
+                self.close()
 
     def execute(self, sql):
         self.connect_db()
