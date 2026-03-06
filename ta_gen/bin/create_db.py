@@ -6,10 +6,9 @@ import csv
 import os
 import subprocess
 import sys
-from collections import Counter
 from functools import partial
 from itertools import permutations
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 from queue import Queue
 from threading import Thread
 
@@ -358,6 +357,8 @@ def fragment_mols(args):
     total_chunks = total_rows // args.chunk_size + 1
     if args.mode == 1:
         total_chunks *= 2
+    print(f"Applied cpus: {args.ncpu}. Total cpus: {cpu_count}")
+    args.ncpu = min(args.ncpu, cpu_count)
     q = Queue()
     t = Thread(target=upload_to_db, args=(q, db_manager, args.radius, total_chunks))
     t.start()

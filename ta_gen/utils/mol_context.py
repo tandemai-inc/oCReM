@@ -76,7 +76,7 @@ def __standardize_smiles_with_att_points(mol, keep_stereo=False):
     s = Chem.MolToSmiles(mol, isomericSmiles=keep_stereo)
     rep = dict((re.escape(k), v) for k, v in rep.items())
     patt = re.compile("|".join(rep.keys()))
-    s = patt.sub(lambda m: rep[re.escape(m.group(0))], s)
+    s = patt.sub(lambda m: rep.get(re.escape(m.group(0)), m.group(0)), s)
 
     return s
 

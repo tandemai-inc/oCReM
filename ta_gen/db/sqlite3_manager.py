@@ -108,7 +108,7 @@ class SqliteManager(DBManager):
         if missing_envs:
             # insert new env
             self.cursor.executemany(
-                "INSERT INTO env (name, radius) VALUES (?, ?)",
+                "INSERT OR IGNORE INTO env (name, radius) VALUES (?, ?)",
                 [(name, radius) for name in missing_envs],
             )
             # get new ids
@@ -126,7 +126,7 @@ class SqliteManager(DBManager):
         placeholders = ",".join(["?"] * len(core_smis))
         self.cursor.execute(
             f"SELECT core_smi, id FROM fragment WHERE core_smi IN ({placeholders})",
-            list(core_smis),
+            core_smis,
         )
         fragment_map = {row[0]: row[1] for row in self.cursor.fetchall()}
         missing_fragments = [name for name in core_smis if name not in fragment_map]
@@ -134,7 +134,7 @@ class SqliteManager(DBManager):
         if missing_fragments:
             # insert new fragment
             self.cursor.executemany(
-                "INSERT INTO fragment (core_smi, core_num_atoms) VALUES (?, ?)",
+                "INSERT OR IGNORE INTO fragment (core_smi, core_num_atoms) VALUES (?, ?)",
                 [(name, fragments.get(name)) for name in missing_fragments],
             )
             # get new ids
@@ -167,7 +167,6 @@ class SqliteManager(DBManager):
                 env_ids = self.insert_new_env(envs, radius)
                 fragment_ids = self.insert_new_fragment(fragments)
                 self.insert_env_fragment(env_fragment_combo, fragment_ids, env_ids)
-                self.conn.commit()
         except Exception as e:
             traceback.print_exc()
         finally:
