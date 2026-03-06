@@ -357,8 +357,8 @@ def fragment_mols(args):
     total_chunks = total_rows // args.chunk_size + 1
     if args.mode == 1:
         total_chunks *= 2
-    print(f"Applied cpus: {args.ncpu}. Total cpus: {cpu_count}")
-    args.ncpu = min(args.ncpu, cpu_count)
+    print(f"Applied cpus: {args.ncpu}. Total cpus: {cpu_count()}")
+    args.ncpu = min(args.ncpu, cpu_count())
     q = Queue()
     t = Thread(target=upload_to_db, args=(q, db_manager, args.radius, total_chunks))
     t.start()
