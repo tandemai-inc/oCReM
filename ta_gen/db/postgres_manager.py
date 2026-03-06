@@ -157,16 +157,16 @@ class PostGresManager(DBManager):
             f"SELECT name, id FROM env WHERE name IN ({placeholders})", envs
         )
         env_map = {row[0]: row[1] for row in self.cursor.fetchall()}
-        missing = [name for name in envs if name not in env_map]
+        missing_envs = [name for name in envs if name not in env_map]
 
-        if missing:
+        if missing_envs:
             self.cursor.executemany(
-                "INSERT INTO env (name, radius) VALUES (%s, %s)",
-                [(name, radius) for name in missing],
+                "INSERT INTO env (name, radius) VALUES (%s, %s) ON CONFLICT (name) DO NOTHING",
+                [(name, radius) for name in missing_envs],
             )
             self.cursor.execute(
-                f"SELECT name, id FROM env WHERE name IN ({','.join(['%s'] * len(missing))})",
-                missing,
+                f"SELECT name, id FROM env WHERE name IN ({','.join(['%s'] * len(missing_envs))})",
+                missing_envs,
             )
             for row in self.cursor.fetchall():
                 env_map[row[0]] = row[1]
@@ -181,16 +181,16 @@ class PostGresManager(DBManager):
             core_smis,
         )
         fragment_map = {row[0]: row[1] for row in self.cursor.fetchall()}
-        missing = [name for name in core_smis if name not in fragment_map]
-        if missing:
-            data = [(name, fragments[name]) for name in missing]
+        missing_fragments = [name for name in core_smis if name not in fragment_map]
+        if missing_fragments:
+            data = [(name, fragments[name]) for name in missing_fragments]
             self.cursor.executemany(
-                "INSERT INTO fragment (core_smi, core_num_atoms) VALUES (%s, %s)",
+                "INSERT INTO fragment (core_smi, core_num_atoms) VALUES (%s, %s) ON CONFLICT (core_smi) DO NOTHING",
                 data,
             )
             self.cursor.execute(
-                f"SELECT core_smi, id FROM fragment WHERE core_smi IN ({','.join(['%s'] * len(missing))})",
-                missing,
+                f"SELECT core_smi, id FROM fragment WHERE core_smi IN ({','.join(['%s'] * len(missing_fragments))})",
+                missing_fragments,
             )
             for row in self.cursor.fetchall():
                 fragment_map[row[0]] = row[1]
@@ -218,7 +218,6 @@ class PostGresManager(DBManager):
                 env_ids = self.insert_new_env(envs, radius)
                 fragment_ids = self.insert_new_fragment(fragments)
                 self.insert_env_fragment(env_fragment_combo, fragment_ids, env_ids)
-                self.conn.commit()
         except Exception as e:
             traceback.print_exc()
         finally:
