@@ -548,7 +548,7 @@ def __get_data(
 def __get_data_link(
     mol1,
     mol2,
-    db_name,
+    db_manager,
     radius,
     dist,
     min_atoms,
@@ -562,9 +562,9 @@ def __get_data_link(
     **kwargs,
 ):
     for frag_sma, core_sma, freq, ids_1, ids_2 in __gen_replacements(
-        mol1=mol1,
-        mol2=mol2,
-        db_name=db_name,
+        mol1,
+        mol2,
+        db_manager,
         radius=radius,
         dist=dist,
         min_size=0,
@@ -800,7 +800,7 @@ def mutate_mol(
 
 def grow_mol(
     mol,
-    db_name,
+    db_manager,
     radius=3,
     min_atoms=1,
     max_atoms=2,
@@ -874,7 +874,6 @@ def grow_mol(
 
     """
 
-    __check_db_existence(db_name)
     m = Chem.AddHs(mol)
 
     # create the list of ids of protected Hs only would be enough, however in the first case (replace_ids) the full list
@@ -915,7 +914,7 @@ def grow_mol(
 
     return mutate_mol(
         m,
-        db_name,
+        db_manager,
         radius,
         min_size=0,
         max_size=0,
@@ -939,7 +938,7 @@ def grow_mol(
 def link_mols(
     mol1,
     mol2,
-    db_name,
+    db_manager,
     radius=3,
     dist=None,
     min_atoms=1,
@@ -1054,7 +1053,6 @@ def link_mols(
 
         return protected_ids
 
-    __check_db_existence(db_name)
     products = set()
 
     mol1 = Chem.AddHs(mol1)
@@ -1066,9 +1064,9 @@ def link_mols(
     if ncores == 1:
 
         for frag_sma, core_sma, freq, ids_1, ids_2 in __gen_replacements(
-            mol1=mol1,
-            mol2=mol2,
-            db_name=db_name,
+            mol1,
+            mol2,
+            db_manager,
             radius=radius,
             dist=dist,
             min_size=0,
@@ -1116,7 +1114,7 @@ def link_mols(
                 __get_data_link(
                     mol1,
                     mol2,
-                    db_name,
+                    db_manager,
                     radius,
                     dist,
                     min_atoms,

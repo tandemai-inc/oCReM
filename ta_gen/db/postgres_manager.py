@@ -226,6 +226,7 @@ class PostGresManager(DBManager):
                     env_ids = self.insert_new_env(envs, radius)
                     fragment_ids = self.insert_new_fragment(fragments)
                     self.insert_env_fragment(env_fragment_combo, fragment_ids, env_ids)
+                break
             except DeadlockDetected as e:
                 print("Deadlock occur")
                 retries += 1
