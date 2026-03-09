@@ -143,7 +143,9 @@ def preprocess_input_file(input_file):
     name, ext = os.path.splitext(input_file)
     output_file = f"{name}_deduped{ext}"
     if ext == ".csv":
-        os.system(f'( head -n 1 "{input_file}"; tail -n +2 "{input_file}" | sort -u ) > "{output_file}"')
+        os.system(
+            f'( head -n 1 "{input_file}"; tail -n +2 "{input_file}" | sort -u ) > "{output_file}"'
+        )
     else:
         os.system(f"sort -u {input_file} -o {output_file}")
     return output_file

@@ -341,7 +341,7 @@ def __get_replacements(
         f"e.name = '{env}'",
         f"e.radius = {radius}",
         f"ef.frequency >= {min_freq}",
-        f"f.core_num_atoms BETWEEN {min_atoms} AND {max_atoms}"
+        f"f.core_num_atoms BETWEEN {min_atoms} AND {max_atoms}",
     ]
     if isinstance(dist, int):
         condition.append(f"ef.dist2 = {dist}")
@@ -451,7 +451,10 @@ def __gen_replacements(
                 # else:
                 selected_results = random.sample(list(results), n)
                 results.difference_update(selected_results)
-                results = {(core_smi, core_sma, freq, frag_sma, core, ids) for core_smi, core_sma, freq in selected_results}
+                results = {
+                    (core_smi, core_sma, freq, frag_sma, core, ids)
+                    for core_smi, core_sma, freq in selected_results
+                }
                 replacements.update(results)
 
             for core_smi, core_sma, freq in results:
@@ -482,18 +485,9 @@ def __gen_replacements(
                     yield core_smi
                 else:
                     if link:
-                        yield (
-                            frag_sma,
-                            core_sma, freq,
-                            ids[0],
-                            ids[1]
-                        )
+                        yield (frag_sma, core_sma, freq, ids[0], ids[1])
                     else:
-                        yield (
-                            frag_sma,
-                            core_sma, freq,
-                            ids[0]
-                        )
+                        yield (frag_sma, core_sma, freq, ids[0])
 
 
 def __frag_replace_mp(items):
@@ -1373,4 +1367,3 @@ def get_mols_from_replacements(
                     yield res[0]
                 else:
                     yield res
-

@@ -4,12 +4,12 @@
 
 import configparser
 import copy
-import traceback
 import time
+import traceback
 
 import psycopg2
-from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from psycopg2.errors import DeadlockDetected
+from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 from ta_gen.db.db_manager import DBManager
 
@@ -204,7 +204,13 @@ class PostGresManager(DBManager):
 
     def insert_env_fragment(self, env_fragment_combo, fragment_ids, env_ids):
         upsert_data = [
-            (env_ids[env], fragment_ids[core_smi], attr["core_sma"], attr["dist2"], attr["freq"])
+            (
+                env_ids[env],
+                fragment_ids[core_smi],
+                attr["core_sma"],
+                attr["dist2"],
+                attr["freq"],
+            )
             for (env, core_smi), attr in env_fragment_combo.items()
         ]
 

@@ -152,7 +152,13 @@ class SqliteManager(DBManager):
 
     def insert_env_fragment(self, env_fragment_combo, fragment_ids, env_ids):
         upsert_data = [
-            (env_ids[env], fragment_ids[core_smi], attr["core_sma"], attr["dist2"], attr["freq"])
+            (
+                env_ids[env],
+                fragment_ids[core_smi],
+                attr["core_sma"],
+                attr["dist2"],
+                attr["freq"],
+            )
             for (env, core_smi), attr in env_fragment_combo.items()
         ]
         upsert_sql = """
