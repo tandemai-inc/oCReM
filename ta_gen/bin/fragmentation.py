@@ -101,6 +101,12 @@ def schema_parser():
     )
     group = parser.add_argument_group("Database Parameters")
     group.add_argument(
+        "--use_db",
+        action="store_true",
+        default=False,
+        help="set this flag if you want to save results to database.",
+    )
+    group.add_argument(
         "--db_type",
         metavar="STRING",
         required=False,
@@ -131,9 +137,20 @@ def schema_parser():
     return parser
 
 
+def prepare_args(args):
+    if args.use_db:
+        assert args.ini_file is not None, "ini_file is required when use_db is set."
+    else:
+        assert args.ini_file is None, "ini_file should be None when use_db is not set."
+
+    if not args.use_db:
+        args.debug = True
+
+
 def parse_args():
     parser = schema_parser()
     args, _ = parser.parse_known_args()
+    prepare_args(args)
     return args
 
 
@@ -347,29 +364,16 @@ def upload_to_db(q, db_manager, radius, total_chunks):
             pbar.update(1)
 
 
-def fragment_mols(args):
-    # remove duplicated smiles
-    args.input_file = preprocess_input_file(args.input_file)
-    # create db manager
-    db_manager = create_db_manager(
-        args.db_type, args.db_path, args.ini_file, args.reset_db
-    )
-    total_rows = count_total_rows(args.input_file)
-    print(f"Start import {total_rows} rows to {args.db_type}")
-    total_chunks = total_rows // args.chunk_size + 1
-    if args.mode == 1:
-        total_chunks *= 2
-    print(f"Applied cpus: {args.ncpu}. Total cpus: {cpu_count()}")
-    args.ncpu = min(args.ncpu, cpu_count())
-    q = Queue()
-    t = Thread(target=upload_to_db, args=(q, db_manager, args.radius, total_chunks))
-    t.start()
-    if args.debug:
-        with open(args.out, "w") as f_output:
-            # create csv writer
-            csv_writer = csv.writer(f_output, delimiter=args.sep_out)
+class IntermediateFileManager(object):
+
+    def __init__(self, debug, args):
+        self.args = args
+        if debug:
+            self.intermediate_file = args.out
+            self.f_output = open(self.intermediate_file, "w")
+            self.csv_writer = csv.writer(self.f_output, delimiter=args.sep_out)
             # write header
-            csv_writer.writerow(
+            self.csv_writer.writerow(
                 [
                     "smiles",
                     "smi_id",
@@ -382,79 +386,98 @@ def fragment_mols(args):
                     "dist2",
                 ]
             )
-            if args.mode in [0, 1]:
-                print(f"Start fragment heavy atoms")
-                chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
-                with Pool(args.ncpu) as p:
-                    __fragment_mol = partial(
-                        __fragment_mol_heavy_atoms,
-                        max_heavy_atoms=args.max_heavy_atoms,
-                        radius=args.radius,
-                        keep_stereo=args.keep_stereo,
-                    )
-                    frags_heavy_atoms = p.imap_unordered(__fragment_mol, chunks)
-                    for frag in frags_heavy_atoms:
-                        if frag is None:
-                            continue
-                        q.put(frag)
-                        csv_writer.writerows(frag)
-            if args.mode in [1, 2]:
-                print(f"Start fragment hydrogen atoms")
-                chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
-                with Pool(args.ncpu) as p:
-                    __fragment_mol = partial(
-                        __fragment_mol_hydrogen,
-                        max_heavy_atoms=args.max_heavy_atoms,
-                        radius=args.radius,
-                        keep_stereo=args.keep_stereo,
-                    )
-                    frags_hydrogen = p.imap_unordered(__fragment_mol, chunks)
-                    for frag in frags_hydrogen:
-                        if frag is None:
-                            continue
-                        q.put(frag)
-                        csv_writer.writerows(frag)
-    else:
-        if args.mode in [0, 1]:
-            print(f"Start fragment heavy atoms")
-            chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
-            __fragment_mol = partial(
-                __fragment_mol_heavy_atoms,
-                max_heavy_atoms=args.max_heavy_atoms,
-                radius=args.radius,
-                keep_stereo=args.keep_stereo,
-            )
-            with Pool(args.ncpu) as p:
-                frags_heavy_atoms = p.imap_unordered(__fragment_mol, chunks)
-                for frag in frags_heavy_atoms:
-                    if frag is None:
-                        continue
-                    q.put(frag)
-        if args.mode in [1, 2]:
-            print(f"Start fragment hydrogen atoms")
-            chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
-            __fragment_mol = partial(
-                __fragment_mol_hydrogen,
-                max_heavy_atoms=args.max_heavy_atoms,
-                radius=args.radius,
-                keep_stereo=args.keep_stereo,
-            )
-            with Pool(args.ncpu) as p:
-                frags_hydrogen = p.imap_unordered(__fragment_mol, chunks)
-                for frag in frags_hydrogen:
-                    if frag is None:
-                        continue
-                    q.put(frag)
+            self.write = self.__write
+        else:
+            # do not write to file
+            self.write = lambda x: None
 
-    q.put(None)
-    t.join()
+    def __write(self, data):
+        self.csv_writer.writerows(data)
+
+    def close(self):
+        self.f_output.close()
+
+
+class DBManager(object):
+
+    def __init__(self, use_db, args):
+        self.use_db = use_db
+        self.args = args
+        if self.use_db:
+            self.db_manager = create_db_manager(
+                args.db_type, args.db_path, args.ini_file, args.reset_db
+            )
+
+            # create thread to upload
+            self.q = Queue()
+            self.upload_thread = Thread(
+                target=upload_to_db,
+                args=(self.q, self.db_manager, args.radius, args.total_chunks),
+            )
+            self.upload_thread.start()
+
+            self.update_queue = self.__update_queue
+            self.join = self.upload_thread.join
+        else:
+            self.update_queue = lambda x: None
+            self.join = lambda: None
+
+    def __update_queue(self, data):
+        self.q.put(data)
+
+
+def fragment_mols(args):
+    # remove duplicated smiles
+    args.input_file = preprocess_input_file(args.input_file)
+    total_rows = count_total_rows(args.input_file)
+    print(f"Start import {total_rows} rows to {args.db_type}")
+    total_chunks = total_rows // args.chunk_size + 1
+    if args.mode == 1:
+        total_chunks *= 2
+    print(f"Applied cpus: {args.ncpu}. Total cpus: {cpu_count()}")
+    args.ncpu = min(args.ncpu, cpu_count())
+    # create intermediate file manager
+    intermediate_file_manager = IntermediateFileManager(args.debug, args)
+    # create db manager
+    db_manager = DBManager(args.use_db, args)
+    if args.mode in [0, 1]:
+        print(f"Start fragment heavy atoms")
+        chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
+        __fragment_mol = partial(
+            __fragment_mol_heavy_atoms,
+            max_heavy_atoms=args.max_heavy_atoms,
+            radius=args.radius,
+            keep_stereo=args.keep_stereo,
+        )
+        with Pool(args.ncpu) as p:
+            frags_heavy_atoms = p.imap_unordered(__fragment_mol, chunks)
+            for frag in frags_heavy_atoms:
+                if frag is None:
+                    continue
+                db_manager.update_queue(frag)
+                intermediate_file_manager.write(frag)
+    if args.mode in [1, 2]:
+        print(f"Start fragment hydrogen atoms")
+        chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
+        __fragment_mol = partial(
+            __fragment_mol_hydrogen,
+            max_heavy_atoms=args.max_heavy_atoms,
+            radius=args.radius,
+            keep_stereo=args.keep_stereo,
+        )
+        with Pool(args.ncpu) as p:
+            frags_hydrogen = p.imap_unordered(__fragment_mol, chunks)
+            for frag in frags_hydrogen:
+                if frag is None:
+                    continue
+                db_manager.update_queue(frag)
+                intermediate_file_manager.write(frag)
+
+    db_manager.update_queue(None)
+    db_manager.join()
     print(f"finished uploading {args.input_file} to {args.db_type} database")
-
-
-def create_db(args):
-    fragment_mols(args)
 
 
 if __name__ == "__main__":
     args = parse_args()
-    create_db(args)
+    fragment_mols(args)
