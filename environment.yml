@@ -1,6 +1,5 @@
 name: crem
 channels:
-  - pytorch
   - conda-forge
 dependencies:
   - python=3.10
@@ -11,5 +10,3 @@ dependencies:
   - pyyaml
   - rdkit=2024.03.5
   - pip
-  - pip:
-    - crem==0.2.9

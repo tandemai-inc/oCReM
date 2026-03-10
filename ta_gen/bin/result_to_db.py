@@ -2,11 +2,9 @@
 # -*- coding:utf-8 -*-
 
 import argparse
-import csv
 import os
 import subprocess
 import sys
-from functools import partial
 from itertools import permutations
 from multiprocessing import Pool, cpu_count
 from queue import Queue
@@ -56,26 +54,6 @@ def schema_parser():
         default=",",
         help="separator in input file. Default: Tab.",
     )
-    parser.add_argument(
-        "-d",
-        "--sep_out",
-        metavar="STRING",
-        required=False,
-        default=",",
-        help="separator in the output file. Default: comma",
-    )
-    parser.add_argument(
-        "-m",
-        "--mode",
-        metavar="INTEGER",
-        required=False,
-        default=0,
-        choices=[0, 1, 2],
-        type=int,
-        help="fragmentation mode: 0 - all atoms constitute a fragment, 1- heavy atoms only, "
-        "2 - hydrogen atoms only. Default: 0.",
-    )
-
     group = parser.add_argument_group("Fragment to Environment Parameters")
     group.add_argument(
         "--max_heavy_atoms",
@@ -100,12 +78,6 @@ def schema_parser():
         help="set this flag if you want to keep stereo in context and core parts.",
     )
     group = parser.add_argument_group("Database Parameters")
-    group.add_argument(
-        "--use_db",
-        action="store_true",
-        default=False,
-        help="set this flag if you want to save results to database.",
-    )
     group.add_argument(
         "--db_type",
         metavar="STRING",
@@ -138,11 +110,9 @@ def schema_parser():
 
 
 def prepare_args(args):
-    if args.use_db and args.db_type == "postgres":
+    if args.db_type == "postgres":
         assert os.path.exists(args.ini_file), f"ini_file {args.ini_file} does not exist."
 
-    if not args.use_db:
-        args.debug = True
 
 
 def parse_args():
@@ -180,24 +150,15 @@ def read_chunks(input_file, chunk_size, sep):
     _, ext = os.path.splitext(input_file)
     if ext == ".csv":
         chunks = pd.read_csv(input_file, sep=sep, chunksize=chunk_size)
-    elif ext == ".smi":
-        chunks = pd.read_csv(
-            input_file,
-            header=None,
-            names=["smiles", "smi_id"],
-            sep=sep,
-            na_filter=False,
-            chunksize=chunk_size,
-        )
     else:
         chunks = pd.read_csv(
-            input_file,
-            header=None,
-            names=["smiles", "smi_id"],
-            sep=sep,
-            na_filter=False,
-            chunksize=chunk_size,
+            input_file, sep=sep, chunksize=chunk_size,
+            names=[
+                "smi", "smi_id",
+                "core", "chains", "env", "core_smi",
+                "num_heavy_atoms", "core_sma", "dist2"],
         )
+
     return chunks
 
 
@@ -336,18 +297,17 @@ def batch_insert_db(data, db_manager, radius):
     envs = set()
     fragments = {}
     env_fragment_combo = {}
-    for row in data:
-        smi, smi_id, core, chains, env, core_smi, num_heavy_atoms, core_sma, dist2 = row
-        envs.add(env)
-        fragments.update({core_smi: num_heavy_atoms})
-        if (env, core_smi) in env_fragment_combo:
-            env_fragment_combo[(env, core_smi)]["freq"] += 1
-        else:
-            env_fragment_combo[(env, core_smi)] = {
-                "core_sma": core_sma,
-                "dist2": dist2,
-                "freq": 1,
-            }
+    smi, smi_id, core, chains, env, core_smi, num_heavy_atoms, core_sma, dist2 = data
+    envs.add(env)
+    fragments.update({core_smi: num_heavy_atoms})
+    if (env, core_smi) in env_fragment_combo:
+        env_fragment_combo[(env, core_smi)]["freq"] += 1
+    else:
+        env_fragment_combo[(env, core_smi)] = {
+            "core_sma": core_sma,
+            "dist2": dist2,
+            "freq": 1,
+        }
 
     db_manager.insert(list(envs), fragments, env_fragment_combo, radius)
 
@@ -362,63 +322,25 @@ def upload_to_db(q, db_manager, radius, total_chunks):
             pbar.update(1)
 
 
-class IntermediateFileManager(object):
-
-    def __init__(self, debug, args):
-        self.args = args
-        if debug:
-            self.intermediate_file = args.out
-            self.f_output = open(self.intermediate_file, "w")
-            self.csv_writer = csv.writer(self.f_output, delimiter=args.sep_out)
-            # write header
-            self.csv_writer.writerow(
-                [
-                    "smiles",
-                    "smi_id",
-                    "core",
-                    "chains",
-                    "env",
-                    "cores",
-                    "num_heavy_atoms",
-                    "sma",
-                    "dist2",
-                ]
-            )
-            self.write = self.__write
-        else:
-            # do not write to file
-            self.write = lambda x: None
-
-    def __write(self, data):
-        self.csv_writer.writerows(data)
-
-    def close(self):
-        self.f_output.close()
-
-
 class DBManager(object):
 
     def __init__(self, use_db, args):
         self.use_db = use_db
         self.args = args
-        if self.use_db:
-            self.db_manager = create_db_manager(
-                args.db_type, args.db_path, args.ini_file, args.reset_db
-            )
+        self.db_manager = create_db_manager(
+            args.db_type, args.db_path, args.ini_file, args.reset_db
+        )
 
-            # create thread to upload
-            self.q = Queue()
-            self.upload_thread = Thread(
-                target=upload_to_db,
-                args=(self.q, self.db_manager, args.radius, args.total_chunks),
-            )
-            self.upload_thread.start()
+        # create thread to upload
+        self.q = Queue()
+        self.upload_thread = Thread(
+            target=upload_to_db,
+            args=(self.q, self.db_manager, args.radius, args.total_chunks),
+        )
+        self.upload_thread.start()
 
-            self.update_queue = self.__update_queue
-            self.join = self.upload_thread.join
-        else:
-            self.update_queue = lambda x: None
-            self.join = lambda: None
+        self.update_queue = self.__update_queue
+        self.join = self.upload_thread.join
 
     def __update_queue(self, data):
         self.q.put(data)
@@ -429,54 +351,21 @@ def fragment_mols(args):
     args.input_file = preprocess_input_file(args.input_file)
     total_rows = count_total_rows(args.input_file)
     print(f"Start import {total_rows} rows to {args.db_type}")
-    args.total_chunks = total_rows // args.chunk_size + 1
-    if args.mode == 1:
-        args.total_chunks *= 2
     print(f"Applied cpus: {args.ncpu}. Total cpus: {cpu_count()}")
     args.ncpu = min(args.ncpu, cpu_count())
-    # create intermediate file manager
-    intermediate_file_manager = IntermediateFileManager(args.debug, args)
+    args.total_chunks = total_rows // args.chunk_size + 1
     # create db manager
-    db_manager = DBManager(args.use_db, args)
-    if args.mode in [0, 1]:
-        print(f"Start fragment heavy atoms")
-        chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
-        __fragment_mol = partial(
-            __fragment_mol_heavy_atoms,
-            max_heavy_atoms=args.max_heavy_atoms,
-            radius=args.radius,
-            keep_stereo=args.keep_stereo,
-        )
-        with Pool(args.ncpu) as p:
-            frags_heavy_atoms = p.imap_unordered(__fragment_mol, chunks)
-            for frag in frags_heavy_atoms:
-                if frag is None:
-                    continue
-                db_manager.update_queue(frag)
-                intermediate_file_manager.write(frag)
-    if args.mode in [1, 2]:
-        print(f"Start fragment hydrogen atoms")
-        chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
-        __fragment_mol = partial(
-            __fragment_mol_hydrogen,
-            max_heavy_atoms=args.max_heavy_atoms,
-            radius=args.radius,
-            keep_stereo=args.keep_stereo,
-        )
-        with Pool(args.ncpu) as p:
-            frags_hydrogen = p.imap_unordered(__fragment_mol, chunks)
-            for frag in frags_hydrogen:
-                if frag is None:
-                    continue
-                db_manager.update_queue(frag)
-                intermediate_file_manager.write(frag)
+    db_manager = DBManager(True, args)
+    print(f"Start save results to db")
+    chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
+    for chunk in chunks:
+        for frag in chunk.values:
+            db_manager.update_queue(frag)
 
     db_manager.update_queue(None)
     db_manager.join()
-    if args.use_db:
-        print(f"finished uploading {args.input_file} to {args.db_type} database")
-    else:
-        print(f"finished fragmenting {args.input_file} to {args.out}")
+    print(f"finished uploading {args.input_file} to {args.db_type} database")
+
 
 
 if __name__ == "__main__":
