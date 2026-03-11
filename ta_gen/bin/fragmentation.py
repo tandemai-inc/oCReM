@@ -139,7 +139,9 @@ def schema_parser():
 
 def prepare_args(args):
     if args.use_db and args.db_type == "postgres":
-        assert os.path.exists(args.ini_file), f"ini_file {args.ini_file} does not exist."
+        assert os.path.exists(
+            args.ini_file
+        ), f"ini_file {args.ini_file} does not exist."
 
     if not args.use_db:
         args.debug = True

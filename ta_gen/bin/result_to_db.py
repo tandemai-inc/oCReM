@@ -111,8 +111,9 @@ def schema_parser():
 
 def prepare_args(args):
     if args.db_type == "postgres":
-        assert os.path.exists(args.ini_file), f"ini_file {args.ini_file} does not exist."
-
+        assert os.path.exists(
+            args.ini_file
+        ), f"ini_file {args.ini_file} does not exist."
 
 
 def parse_args():
@@ -120,20 +121,6 @@ def parse_args():
     args, _ = parser.parse_known_args()
     prepare_args(args)
     return args
-
-
-def preprocess_input_file(input_file):
-    """Preprocess input file"""
-    # remove duplicated
-    name, ext = os.path.splitext(input_file)
-    output_file = f"{name}_deduped{ext}"
-    if ext == ".csv":
-        os.system(
-            f'( head -n 1 "{input_file}"; tail -n +2 "{input_file}" | sort -u ) > "{output_file}"'
-        )
-    else:
-        os.system(f"sort -u {input_file} -o {output_file}")
-    return output_file
 
 
 def count_total_rows(input_file):
@@ -152,11 +139,20 @@ def read_chunks(input_file, chunk_size, sep):
         chunks = pd.read_csv(input_file, sep=sep, chunksize=chunk_size)
     else:
         chunks = pd.read_csv(
-            input_file, sep=sep, chunksize=chunk_size,
+            input_file,
+            sep=sep,
+            chunksize=chunk_size,
             names=[
-                "smi", "smi_id",
-                "core", "chains", "env", "core_smi",
-                "num_heavy_atoms", "core_sma", "dist2"],
+                "smi",
+                "smi_id",
+                "core",
+                "chains",
+                "env",
+                "core_smi",
+                "num_heavy_atoms",
+                "core_sma",
+                "dist2",
+            ],
         )
 
     return chunks
@@ -167,7 +163,9 @@ def batch_insert_db(data, db_manager, radius):
     fragments = {}
     env_fragment_combo = {}
     for frag in data.values:
-        smi, smi_id, core, chains, env, core_smi, num_heavy_atoms, core_sma, dist2 = frag
+        smi, smi_id, core, chains, env, core_smi, num_heavy_atoms, core_sma, dist2 = (
+            frag
+        )
         envs.add(env)
         fragments.update({core_smi: num_heavy_atoms})
         if (env, core_smi) in env_fragment_combo:
@@ -217,8 +215,6 @@ class DBManager(object):
 
 
 def fragment_mols(args):
-    # remove duplicated smiles
-    args.input_file = preprocess_input_file(args.input_file)
     total_rows = count_total_rows(args.input_file)
     print(f"Start import {total_rows} rows from {args.input_file} to {args.db_type}")
     print(f"Applied cpus: {args.ncpu}. Total cpus: {cpu_count()}")
@@ -234,7 +230,6 @@ def fragment_mols(args):
     db_manager.update_queue(None)
     db_manager.join()
     print(f"finished uploading {args.input_file} to {args.db_type} database")
-
 
 
 if __name__ == "__main__":
