@@ -364,6 +364,15 @@ def upload_to_db(q, db_manager, radius, total_chunks):
             pbar.update(1)
 
 
+def update_progress(q, total_chunks):
+    with tqdm(total=total_chunks, desc="Uploading to database") as pbar:
+        while True:
+            data = q.get()
+            if data is None:
+                break
+            pbar.update(1)
+
+
 class IntermediateFileManager(object):
 
     def __init__(self, debug, args):
@@ -415,14 +424,16 @@ class DBManager(object):
                 args=(self.q, self.db_manager, args.radius, args.total_chunks),
             )
             self.upload_thread.start()
-
-            self.update_queue = self.__update_queue
-            self.join = self.upload_thread.join
         else:
-            self.update_queue = lambda x: None
-            self.join = lambda: None
+            # create thread to update progress
+            self.q = Queue()
+            self.upload_thread = Thread(
+                target=update_progress,
+                args=(self.q, args.total_chunks),
+            )
+            self.upload_thread.start()
 
-    def __update_queue(self, data):
+    def update_queue(self, data):
         self.q.put(data)
 
 
@@ -474,7 +485,7 @@ def fragment_mols(args):
                 intermediate_file_manager.write(frag)
 
     db_manager.update_queue(None)
-    db_manager.join()
+    db_manager.upload_thread.join()
     if args.use_db:
         print(f"finished uploading {args.input_file} to {args.db_type} database")
     else:
