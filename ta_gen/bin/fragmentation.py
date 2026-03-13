@@ -8,9 +8,7 @@ import subprocess
 import sys
 from functools import partial
 from itertools import permutations
-from multiprocessing import Pool, cpu_count
-from queue import Queue
-from threading import Thread
+from multiprocessing import Pool, cpu_count, Process, Queue
 
 import pandas as pd
 from rdkit import Chem
@@ -419,7 +417,7 @@ class DBManager(object):
 
             # create thread to upload
             self.q = Queue()
-            self.upload_thread = Thread(
+            self.upload_thread = Process(
                 target=upload_to_db,
                 args=(self.q, self.db_manager, args.radius, args.total_chunks),
             )
@@ -427,7 +425,7 @@ class DBManager(object):
         else:
             # create thread to update progress
             self.q = Queue()
-            self.upload_thread = Thread(
+            self.upload_thread = Process(
                 target=update_progress,
                 args=(self.q, args.total_chunks),
             )
@@ -435,6 +433,9 @@ class DBManager(object):
 
     def update_queue(self, data):
         self.q.put(data)
+
+    def close(self):
+        self.db_manager.close()
 
 
 def fragment_mols(args):

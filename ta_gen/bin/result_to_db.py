@@ -4,20 +4,13 @@
 import argparse
 import os
 import subprocess
-import sys
-from itertools import permutations
-from multiprocessing import Pool, cpu_count
-from queue import Queue
-from threading import Thread
+from multiprocessing import  cpu_count, Process, Queue
 
 import pandas as pd
-from rdkit import Chem
-from rdkit.Chem import rdMMPA
 from tqdm import tqdm
 
 from ta_gen.db import create_db_manager
-from ta_gen.utils.mol_context import (combine_core_env_to_rxn_smarts,
-                                      get_std_context_core_permutations)
+
 
 
 def schema_parser():
@@ -136,12 +129,13 @@ def count_total_rows(input_file):
 def read_chunks(input_file, chunk_size, sep):
     _, ext = os.path.splitext(input_file)
     if ext == ".csv":
-        chunks = pd.read_csv(input_file, sep=sep, chunksize=chunk_size)
+        chunks = pd.read_csv(input_file, sep=sep, chunksize=chunk_size, on_bad_lines='skip')
     else:
         chunks = pd.read_csv(
             input_file,
             sep=sep,
             chunksize=chunk_size,
+            on_bad_lines='skip',
             names=[
                 "smi",
                 "smi_id",
@@ -201,7 +195,7 @@ class DBManager(object):
 
         # create thread to upload
         self.q = Queue()
-        self.upload_thread = Thread(
+        self.upload_thread = Process(
             target=upload_to_db,
             args=(self.q, self.db_manager, args.radius, args.total_chunks),
         )
@@ -212,6 +206,9 @@ class DBManager(object):
 
     def __update_queue(self, data):
         self.q.put(data)
+
+    def close(self):
+        self.db_manager.close()
 
 
 def fragment_mols(args):
@@ -229,6 +226,7 @@ def fragment_mols(args):
 
     db_manager.update_queue(None)
     db_manager.join()
+    db_manager.close()
     print(f"finished uploading {args.input_file} to {args.db_type} database")
 
 
