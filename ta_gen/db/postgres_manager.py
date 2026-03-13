@@ -171,7 +171,7 @@ class PostGresManager(DBManager):
             # copy missing_envs to temp table
             buf = io.StringIO()
             for item in missing_envs:
-                buf.write(f"{item[0]}\t{item[1]}\n")
+                buf.write(f"{item[0]}\t{radius}\n")
             buf.seek(0)
             self.cursor.execute(
                 "CREATE TEMP TABLE tmp_env (name TEXT, radius SMALLINT) ON COMMIT DROP"
@@ -202,8 +202,8 @@ class PostGresManager(DBManager):
         if missing_fragments:
             # copy missing_fragments to temp table
             buf = io.StringIO()
-            for item in missing_fragments:
-                buf.write(f"{item[0]}\t{item[1]}\n")
+            for core_smi in missing_fragments:
+                buf.write(f"{core_smi}\t{fragments[core_smi]}\n")
             buf.seek(0)
             self.cursor.execute(
                 "CREATE TEMP TABLE tmp_frag (core_smi TEXT, core_num_atoms INTEGER) ON COMMIT DROP"
@@ -228,20 +228,10 @@ class PostGresManager(DBManager):
         return fragment_map
 
     def insert_env_fragment(self, env_fragment_combo, fragment_ids, env_ids):
-        upsert_data = [
-            (
-                env_ids[env],
-                fragment_ids[core_smi],
-                attr["core_sma"],
-                attr["dist2"],
-                attr["freq"],
-            )
-            for (env, core_smi), attr in env_fragment_combo.items()
-        ]
         # copy upsert_data to temp table
         buf = io.StringIO()
-        for item in upsert_data:
-            buf.write(f"{item[0]}\t{item[1]}\t{item[2]}\t{item[3]}\t{item[4]}\n")
+        for (env, core_smi), attr in env_fragment_combo.items():
+            buf.write(f"{env_ids[env]}\t{fragment_ids[core_smi]}\t{attr['core_sma']}\t{attr['dist2']}\t{attr['freq']}\n")
         buf.seek(0)
         self.cursor.execute(
             "CREATE TEMP TABLE tmp_ef (env_id BIGINT, fragment_id BIGINT, core_sma TEXT, dist2 SMALLINT, frequency BIGINT) ON COMMIT DROP"
