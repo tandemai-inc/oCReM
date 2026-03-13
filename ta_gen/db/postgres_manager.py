@@ -176,7 +176,7 @@ class PostGresManager(DBManager):
             self.cursor.execute(
                 "CREATE TEMP TABLE tmp_env (name TEXT, radius SMALLINT) ON COMMIT DROP"
             )
-            self.cursor.copy_from(buf, 'tmp_env', columns=('name', 'radius'), sep='\t')
+            self.cursor.copy_from(buf, "tmp_env", columns=("name", "radius"), sep="\t")
             # merge tmp_env to main table
             self.cursor.execute("""
                 INSERT INTO env (name, radius)
@@ -184,7 +184,9 @@ class PostGresManager(DBManager):
                 ON CONFLICT (name) DO NOTHING
             """)
             # get new mapping
-            self.cursor.execute("SELECT name, id FROM env WHERE name = ANY(%s)", (missing_envs,))
+            self.cursor.execute(
+                "SELECT name, id FROM env WHERE name = ANY(%s)", (missing_envs,)
+            )
             for row in self.cursor.fetchall():
                 env_map[row[0]] = row[1]
 
@@ -192,8 +194,9 @@ class PostGresManager(DBManager):
 
     def insert_new_fragment(self, fragments):
         core_smis = list(fragments.keys())
-        self.cursor.execute("SELECT core_smi, id FROM fragment WHERE core_smi = ANY(%s)",
-                            (core_smis,))
+        self.cursor.execute(
+            "SELECT core_smi, id FROM fragment WHERE core_smi = ANY(%s)", (core_smis,)
+        )
         fragment_map = {row[0]: row[1] for row in self.cursor.fetchall()}
         missing_fragments = [name for name in core_smis if name not in fragment_map]
         if missing_fragments:
@@ -203,9 +206,11 @@ class PostGresManager(DBManager):
                 buf.write(f"{item[0]}\t{item[1]}\n")
             buf.seek(0)
             self.cursor.execute(
-                "CREATE TEMP TABLE tmp_frag (core_smi TEXT, core_num_atoms INTEGER) ON COMMIT DROP")
-            self.cursor.copy_from(buf, 'tmp_frag', columns=('core_smi', 'core_num_atoms'),
-                                  sep='\t')
+                "CREATE TEMP TABLE tmp_frag (core_smi TEXT, core_num_atoms INTEGER) ON COMMIT DROP"
+            )
+            self.cursor.copy_from(
+                buf, "tmp_frag", columns=("core_smi", "core_num_atoms"), sep="\t"
+            )
             # merge tmp_frag to main table
             self.cursor.execute("""
                 INSERT INTO fragment (core_smi, core_num_atoms)
@@ -213,8 +218,10 @@ class PostGresManager(DBManager):
                 ON CONFLICT (core_smi) DO NOTHING
             """)
             # get new mapping
-            self.cursor.execute("SELECT core_smi, id FROM fragment WHERE core_smi = ANY(%s)",
-                                (missing_fragments,))
+            self.cursor.execute(
+                "SELECT core_smi, id FROM fragment WHERE core_smi = ANY(%s)",
+                (missing_fragments,),
+            )
             for row in self.cursor.fetchall():
                 fragment_map[row[0]] = row[1]
 
@@ -237,10 +244,14 @@ class PostGresManager(DBManager):
             buf.write(f"{item[0]}\t{item[1]}\t{item[2]}\t{item[3]}\t{item[4]}\n")
         buf.seek(0)
         self.cursor.execute(
-            "CREATE TEMP TABLE tmp_ef (env_id BIGINT, fragment_id BIGINT, core_sma TEXT, dist2 SMALLINT, frequency BIGINT) ON COMMIT DROP")
-        self.cursor.copy_from(buf, 'tmp_ef',
-                              columns=('env_id', 'fragment_id', 'core_sma', 'dist2', 'frequency'),
-                              sep='\t')
+            "CREATE TEMP TABLE tmp_ef (env_id BIGINT, fragment_id BIGINT, core_sma TEXT, dist2 SMALLINT, frequency BIGINT) ON COMMIT DROP"
+        )
+        self.cursor.copy_from(
+            buf,
+            "tmp_ef",
+            columns=("env_id", "fragment_id", "core_sma", "dist2", "frequency"),
+            sep="\t",
+        )
         # upsert in batch
         self.cursor.execute("""
             INSERT INTO env_fragment (env_id, fragment_id, core_sma, dist2, frequency)

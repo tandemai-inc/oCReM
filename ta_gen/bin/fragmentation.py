@@ -8,7 +8,7 @@ import subprocess
 import sys
 from functools import partial
 from itertools import permutations
-from multiprocessing import Pool, cpu_count, Process, Queue
+from multiprocessing import Pool, Process, Queue, cpu_count
 
 import pandas as pd
 from rdkit import Chem
@@ -352,7 +352,8 @@ def batch_insert_db(data, db_manager, radius):
     db_manager.insert(list(envs), fragments, env_fragment_combo, radius)
 
 
-def upload_to_db(q, db_manager, radius, total_chunks):
+def upload_to_db(q, db_type, db_path, ini_file, reset_db, radius, total_chunks):
+    db_manager = create_db_manager(db_type, db_path, ini_file, reset_db)
     with tqdm(total=total_chunks, desc="Uploading to database") as pbar:
         while True:
             data = q.get()
@@ -360,6 +361,7 @@ def upload_to_db(q, db_manager, radius, total_chunks):
                 break
             batch_insert_db(data, db_manager, radius)
             pbar.update(1)
+        db_manager.close()
 
 
 def update_progress(q, total_chunks):
@@ -411,15 +413,20 @@ class DBManager(object):
         self.use_db = use_db
         self.args = args
         if self.use_db:
-            self.db_manager = create_db_manager(
-                args.db_type, args.db_path, args.ini_file, args.reset_db
-            )
 
             # create thread to upload
             self.q = Queue()
             self.upload_thread = Process(
                 target=upload_to_db,
-                args=(self.q, self.db_manager, args.radius, args.total_chunks),
+                args=(
+                    self.q,
+                    args.db_type,
+                    args.db_path,
+                    args.ini_file,
+                    args.reset_db,
+                    args.radius,
+                    args.total_chunks,
+                ),
             )
             self.upload_thread.start()
         else:
@@ -433,9 +440,6 @@ class DBManager(object):
 
     def update_queue(self, data):
         self.q.put(data)
-
-    def close(self):
-        self.db_manager.close()
 
 
 def fragment_mols(args):

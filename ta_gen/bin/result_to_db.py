@@ -4,13 +4,12 @@
 import argparse
 import os
 import subprocess
-from multiprocessing import  cpu_count, Process, Queue
+from multiprocessing import Process, Queue, cpu_count
 
 import pandas as pd
 from tqdm import tqdm
 
 from ta_gen.db import create_db_manager
-
 
 
 def schema_parser():
@@ -129,13 +128,15 @@ def count_total_rows(input_file):
 def read_chunks(input_file, chunk_size, sep):
     _, ext = os.path.splitext(input_file)
     if ext == ".csv":
-        chunks = pd.read_csv(input_file, sep=sep, chunksize=chunk_size, on_bad_lines='skip')
+        chunks = pd.read_csv(
+            input_file, sep=sep, chunksize=chunk_size, on_bad_lines="skip"
+        )
     else:
         chunks = pd.read_csv(
             input_file,
             sep=sep,
             chunksize=chunk_size,
-            on_bad_lines='skip',
+            on_bad_lines="skip",
             names=[
                 "smi",
                 "smi_id",
@@ -174,7 +175,8 @@ def batch_insert_db(data, db_manager, radius):
     db_manager.insert(list(envs), fragments, env_fragment_combo, radius)
 
 
-def upload_to_db(q, db_manager, radius, total_chunks):
+def upload_to_db(q, db_type, db_path, ini_file, reset_db, radius, total_chunks):
+    db_manager = create_db_manager(db_type, db_path, ini_file, reset_db)
     with tqdm(total=total_chunks, desc="Uploading to database") as pbar:
         while True:
             data = q.get()
@@ -182,6 +184,7 @@ def upload_to_db(q, db_manager, radius, total_chunks):
                 break
             batch_insert_db(data, db_manager, radius)
             pbar.update(1)
+        db_manager.close()
 
 
 class DBManager(object):
@@ -189,15 +192,20 @@ class DBManager(object):
     def __init__(self, use_db, args):
         self.use_db = use_db
         self.args = args
-        self.db_manager = create_db_manager(
-            args.db_type, args.db_path, args.ini_file, args.reset_db
-        )
 
         # create thread to upload
         self.q = Queue()
         self.upload_thread = Process(
             target=upload_to_db,
-            args=(self.q, self.db_manager, args.radius, args.total_chunks),
+            args=(
+                self.q,
+                args.db_type,
+                args.db_path,
+                args.ini_file,
+                args.reset_db,
+                args.radius,
+                args.total_chunks,
+            ),
         )
         self.upload_thread.start()
 
@@ -207,11 +215,8 @@ class DBManager(object):
     def __update_queue(self, data):
         self.q.put(data)
 
-    def close(self):
-        self.db_manager.close()
 
-
-def fragment_mols(args):
+def result_to_db(args):
     total_rows = count_total_rows(args.input_file)
     print(f"Start import {total_rows} rows from {args.input_file} to {args.db_type}")
     print(f"Applied cpus: {args.ncpu}. Total cpus: {cpu_count()}")
@@ -226,10 +231,9 @@ def fragment_mols(args):
 
     db_manager.update_queue(None)
     db_manager.join()
-    db_manager.close()
     print(f"finished uploading {args.input_file} to {args.db_type} database")
 
 
 if __name__ == "__main__":
     args = parse_args()
-    fragment_mols(args)
+    result_to_db(args)
