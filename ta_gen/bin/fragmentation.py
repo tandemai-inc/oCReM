@@ -377,6 +377,7 @@ class IntermediateFileManager(object):
 
     def __init__(self, debug, args):
         self.args = args
+        self.debug = debug
         if debug:
             self.intermediate_file = args.out
             self.f_output = open(self.intermediate_file, "w")
@@ -404,7 +405,8 @@ class IntermediateFileManager(object):
         self.csv_writer.writerows(data)
 
     def close(self):
-        self.f_output.close()
+        if self.debug:
+            self.f_output.close()
 
 
 class DBManager(object):
@@ -491,6 +493,7 @@ def fragment_mols(args):
 
     db_manager.update_queue(None)
     db_manager.upload_thread.join()
+    intermediate_file_manager.close()
     if args.use_db:
         print(f"finished uploading {args.input_file} to {args.db_type} database")
     else:

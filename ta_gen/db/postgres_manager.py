@@ -171,7 +171,7 @@ class PostGresManager(DBManager):
             # copy missing_envs to temp table
             buf = io.StringIO()
             for item in missing_envs:
-                buf.write(f"{item[0]}\t{radius}\n")
+                buf.write(f"{item}\t{radius}\n")
             buf.seek(0)
             self.cursor.execute(
                 "CREATE TEMP TABLE tmp_env (name TEXT, radius SMALLINT) ON COMMIT DROP"
@@ -203,7 +203,7 @@ class PostGresManager(DBManager):
             # copy missing_fragments to temp table
             buf = io.StringIO()
             for core_smi in missing_fragments:
-                buf.write(f"{core_smi}\t{fragments[core_smi]}\n")
+                buf.write(f"{core_smi}\t{int(fragments[core_smi])}\n")
             buf.seek(0)
             self.cursor.execute(
                 "CREATE TEMP TABLE tmp_frag (core_smi TEXT, core_num_atoms INTEGER) ON COMMIT DROP"
