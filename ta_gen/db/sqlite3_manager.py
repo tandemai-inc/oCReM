@@ -57,13 +57,6 @@ class SqliteManager(DBManager):
                     )
                 """)
 
-            cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_env_fragment_env_id ON env_fragment(env_id)"
-            )
-            cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_env_fragment_fragment_id ON env_fragment(fragment_id)"
-            )
-
             conn.commit()
             print("all tables created successfully (or already exist)")
 
