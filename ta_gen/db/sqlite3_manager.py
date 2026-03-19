@@ -16,6 +16,8 @@ class SqliteManager(DBManager):
         if reset_db:
             self.clear_db(db_path)
         self.create_db(db_path)
+        # create connection
+        self.connect_db()
 
     def create_db(self, db_path):
         """create database"""
@@ -54,13 +56,6 @@ class SqliteManager(DBManager):
                         FOREIGN KEY (fragment_id) REFERENCES fragment(id) ON DELETE CASCADE
                     )
                 """)
-
-            cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_env_fragment_env_id ON env_fragment(env_id)"
-            )
-            cursor.execute(
-                "CREATE INDEX IF NOT EXISTS idx_env_fragment_fragment_id ON env_fragment(fragment_id)"
-            )
 
             conn.commit()
             print("all tables created successfully (or already exist)")
@@ -170,7 +165,6 @@ class SqliteManager(DBManager):
         self.cursor.executemany(upsert_sql, upsert_data)
 
     def insert(self, envs, fragments, env_fragment_combo, radius):
-        self.connect_db()
         try:
             env_ids = self.insert_new_env(envs, radius)
             fragment_ids = self.insert_new_fragment(fragments)
@@ -178,22 +172,17 @@ class SqliteManager(DBManager):
             self.conn.commit()
         except Exception as e:
             traceback.print_exc()
-            if self.conn:
-                self.conn.rollback()  # rollback
-        finally:
-            self.close()
+            self.conn.rollback()  # rollback
 
     def execute(self, sql):
         self.connect_db()
         try:
-            with self.conn:
-                self.cursor.execute(sql)
-                return self.cursor.fetchall() or []
+            self.cursor.execute(sql)
+            return self.cursor.fetchall() or []
         except Exception as e:
             traceback.print_exc()
+            self.conn.rollback()  # rollback
             return []
-        finally:
-            self.close()
 
     def close(self):
         self.cursor.close()

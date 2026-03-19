@@ -8,9 +8,7 @@ import subprocess
 import sys
 from functools import partial
 from itertools import permutations
-from multiprocessing import Pool, cpu_count
-from queue import Queue
-from threading import Thread
+from multiprocessing import Pool, Process, Queue, cpu_count
 
 import pandas as pd
 from rdkit import Chem
@@ -139,7 +137,9 @@ def schema_parser():
 
 def prepare_args(args):
     if args.use_db and args.db_type == "postgres":
-        assert os.path.exists(args.ini_file), f"ini_file {args.ini_file} does not exist."
+        assert os.path.exists(
+            args.ini_file
+        ), f"ini_file {args.ini_file} does not exist."
 
     if not args.use_db:
         args.debug = True
@@ -352,7 +352,8 @@ def batch_insert_db(data, db_manager, radius):
     db_manager.insert(list(envs), fragments, env_fragment_combo, radius)
 
 
-def upload_to_db(q, db_manager, radius, total_chunks):
+def upload_to_db(q, db_type, db_path, ini_file, reset_db, radius, total_chunks):
+    db_manager = create_db_manager(db_type, db_path, ini_file, reset_db)
     with tqdm(total=total_chunks, desc="Uploading to database") as pbar:
         while True:
             data = q.get()
@@ -360,12 +361,23 @@ def upload_to_db(q, db_manager, radius, total_chunks):
                 break
             batch_insert_db(data, db_manager, radius)
             pbar.update(1)
+        db_manager.close()
+
+
+def update_progress(q, total_chunks):
+    with tqdm(total=total_chunks, desc="Uploading to database") as pbar:
+        while True:
+            data = q.get()
+            if data is None:
+                break
+            pbar.update(1)
 
 
 class IntermediateFileManager(object):
 
     def __init__(self, debug, args):
         self.args = args
+        self.debug = debug
         if debug:
             self.intermediate_file = args.out
             self.f_output = open(self.intermediate_file, "w")
@@ -393,7 +405,8 @@ class IntermediateFileManager(object):
         self.csv_writer.writerows(data)
 
     def close(self):
-        self.f_output.close()
+        if self.debug:
+            self.f_output.close()
 
 
 class DBManager(object):
@@ -402,25 +415,32 @@ class DBManager(object):
         self.use_db = use_db
         self.args = args
         if self.use_db:
-            self.db_manager = create_db_manager(
-                args.db_type, args.db_path, args.ini_file, args.reset_db
-            )
 
             # create thread to upload
             self.q = Queue()
-            self.upload_thread = Thread(
+            self.upload_thread = Process(
                 target=upload_to_db,
-                args=(self.q, self.db_manager, args.radius, args.total_chunks),
+                args=(
+                    self.q,
+                    args.db_type,
+                    args.db_path,
+                    args.ini_file,
+                    args.reset_db,
+                    args.radius,
+                    args.total_chunks,
+                ),
+            )
+            self.upload_thread.start()
+        else:
+            # create thread to update progress
+            self.q = Queue()
+            self.upload_thread = Process(
+                target=update_progress,
+                args=(self.q, args.total_chunks),
             )
             self.upload_thread.start()
 
-            self.update_queue = self.__update_queue
-            self.join = self.upload_thread.join
-        else:
-            self.update_queue = lambda x: None
-            self.join = lambda: None
-
-    def __update_queue(self, data):
+    def update_queue(self, data):
         self.q.put(data)
 
 
@@ -472,7 +492,8 @@ def fragment_mols(args):
                 intermediate_file_manager.write(frag)
 
     db_manager.update_queue(None)
-    db_manager.join()
+    db_manager.upload_thread.join()
+    intermediate_file_manager.close()
     if args.use_db:
         print(f"finished uploading {args.input_file} to {args.db_type} database")
     else:

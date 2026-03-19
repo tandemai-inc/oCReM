@@ -4,20 +4,12 @@
 import argparse
 import os
 import subprocess
-import sys
-from itertools import permutations
-from multiprocessing import Pool, cpu_count
-from queue import Queue
-from threading import Thread
+from multiprocessing import Process, Queue, cpu_count
 
 import pandas as pd
-from rdkit import Chem
-from rdkit.Chem import rdMMPA
 from tqdm import tqdm
 
 from ta_gen.db import create_db_manager
-from ta_gen.utils.mol_context import (combine_core_env_to_rxn_smarts,
-                                      get_std_context_core_permutations)
 
 
 def schema_parser():
@@ -111,8 +103,9 @@ def schema_parser():
 
 def prepare_args(args):
     if args.db_type == "postgres":
-        assert os.path.exists(args.ini_file), f"ini_file {args.ini_file} does not exist."
-
+        assert os.path.exists(
+            args.ini_file
+        ), f"ini_file {args.ini_file} does not exist."
 
 
 def parse_args():
@@ -120,20 +113,6 @@ def parse_args():
     args, _ = parser.parse_known_args()
     prepare_args(args)
     return args
-
-
-def preprocess_input_file(input_file):
-    """Preprocess input file"""
-    # remove duplicated
-    name, ext = os.path.splitext(input_file)
-    output_file = f"{name}_deduped{ext}"
-    if ext == ".csv":
-        os.system(
-            f'( head -n 1 "{input_file}"; tail -n +2 "{input_file}" | sort -u ) > "{output_file}"'
-        )
-    else:
-        os.system(f"sort -u {input_file} -o {output_file}")
-    return output_file
 
 
 def count_total_rows(input_file):
@@ -149,170 +128,55 @@ def count_total_rows(input_file):
 def read_chunks(input_file, chunk_size, sep):
     _, ext = os.path.splitext(input_file)
     if ext == ".csv":
-        chunks = pd.read_csv(input_file, sep=sep, chunksize=chunk_size)
+        chunks = pd.read_csv(
+            input_file, sep=sep, chunksize=chunk_size, on_bad_lines="skip"
+        )
     else:
         chunks = pd.read_csv(
-            input_file, sep=sep, chunksize=chunk_size,
+            input_file,
+            sep=sep,
+            chunksize=chunk_size,
+            on_bad_lines="skip",
             names=[
-                "smi", "smi_id",
-                "core", "chains", "env", "core_smi",
-                "num_heavy_atoms", "core_sma", "dist2"],
+                "smi",
+                "smi_id",
+                "core",
+                "chains",
+                "env",
+                "core_smi",
+                "num_heavy_atoms",
+                "core_sma",
+                "dist2",
+            ],
         )
 
     return chunks
-
-
-def calc_mp(env, core):
-    sma = combine_core_env_to_rxn_smarts(core, env, False)
-    if core.count("*") == 2:
-        mol = Chem.MolFromSmiles(core, sanitize=False)
-        mat = Chem.GetDistanceMatrix(mol)
-        ids = []
-        for a in mol.GetAtoms():
-            if not a.GetAtomicNum():
-                ids.append(a.GetIdx())
-        dist2 = mat[ids[0], ids[1]]
-    else:
-        dist2 = 0
-    return sma, int(dist2)
-
-
-def frag_to_env(smi, core, contexts, max_heavy_atoms, radius, keep_stereo):
-    results = []
-    if not core and not contexts:
-        return results
-
-    if not core:  # one split
-        residues = contexts.split(".")
-        if len(residues) == 2:
-            for context, core in permutations(residues, 2):
-                if context == "[H][*:1]":  # ignore such cases
-                    continue
-
-                mm = Chem.MolFromSmiles(core, sanitize=False)
-                num_heavy_atoms = mm.GetNumHeavyAtoms() if mm else float("inf")
-                if num_heavy_atoms <= max_heavy_atoms:
-                    env, cores = get_std_context_core_permutations(
-                        context, core, radius, keep_stereo
-                    )
-                    if env and cores:
-                        sma, dist2 = calc_mp(env, cores[0])
-                        results.append((env, cores[0], num_heavy_atoms, sma, dist2))
-        else:
-            sys.stderr.write(
-                f"more than two fragments in context ({contexts}) where core is empty for smiles: {smi}\n"
-            )
-            sys.stderr.flush()
-    else:  # two or more splits
-        mm = Chem.MolFromSmiles(core, sanitize=False)
-        num_heavy_atoms = mm.GetNumHeavyAtoms() if mm else float("inf")
-        if num_heavy_atoms <= max_heavy_atoms:
-            env, cores = get_std_context_core_permutations(
-                contexts, core, radius, keep_stereo
-            )
-            if env and cores:
-                for c in cores:
-                    sma, dist2 = calc_mp(env, c)
-                    results.append((env, c, num_heavy_atoms, sma, dist2))
-
-    return results
-
-
-def __fragment_mol_heavy_atoms(df, max_heavy_atoms, radius, keep_stereo):
-    results = []
-    for smi, smi_id in df[["smiles", "smi_id"]].values:
-        mol = Chem.MolFromSmiles(smi)
-        if mol is None:
-            sys.stderr.write(f"Can't generate mol for: {smi}\n")
-            continue
-
-        # heavy atoms
-        frags = rdMMPA.FragmentMol(
-            mol,
-            pattern="[!#1]!@!=!#[!#1]",
-            maxCuts=4,
-            resultsAsMols=False,
-            maxCutBonds=30,
-        )
-        frags += rdMMPA.FragmentMol(
-            mol,
-            pattern="[!#1]!@!=!#[!#1]",
-            maxCuts=3,
-            resultsAsMols=False,
-            maxCutBonds=30,
-        )
-        frags = set(frags)
-        for core, chains in frags:
-            env_results = frag_to_env(
-                smi, core, chains, max_heavy_atoms, radius, keep_stereo
-            )
-            for env, cores, num_heavy_atoms, sma, dist2 in env_results:
-                results.append(
-                    (smi, smi_id, core, chains, env, cores, num_heavy_atoms, sma, dist2)
-                )
-    return results
-
-
-def __fragment_mol_hydrogen(df, max_heavy_atoms, radius, keep_stereo):
-    results = []
-    for smi, smi_id in df[["smiles", "smi_id"]].values:
-        mol = Chem.MolFromSmiles(smi)
-        if mol is None:
-            sys.stderr.write(f"Can't generate mol for: {smi}\n")
-            continue
-
-        # hydrogen splitting
-        mol = Chem.AddHs(mol)
-        n = mol.GetNumAtoms() - mol.GetNumHeavyAtoms()
-        if n < 60:
-            frags = rdMMPA.FragmentMol(
-                mol,
-                pattern="[#1]!@!=!#[!#1]",
-                maxCuts=1,
-                resultsAsMols=False,
-                maxCutBonds=100,
-            )
-            for core, chains in frags:
-                env_results = frag_to_env(
-                    smi, core, chains, max_heavy_atoms, radius, keep_stereo
-                )
-                for env, cores, num_heavy_atoms, sma, dist2 in env_results:
-                    results.append(
-                        (
-                            smi,
-                            smi_id,
-                            core,
-                            chains,
-                            env,
-                            cores,
-                            num_heavy_atoms,
-                            sma,
-                            dist2,
-                        )
-                    )
-    return results
 
 
 def batch_insert_db(data, db_manager, radius):
     envs = set()
     fragments = {}
     env_fragment_combo = {}
-    smi, smi_id, core, chains, env, core_smi, num_heavy_atoms, core_sma, dist2 = data
-    envs.add(env)
-    fragments.update({core_smi: num_heavy_atoms})
-    if (env, core_smi) in env_fragment_combo:
-        env_fragment_combo[(env, core_smi)]["freq"] += 1
-    else:
-        env_fragment_combo[(env, core_smi)] = {
-            "core_sma": core_sma,
-            "dist2": dist2,
-            "freq": 1,
-        }
+    for frag in data.values:
+        smi, smi_id, core, chains, env, core_smi, num_heavy_atoms, core_sma, dist2 = (
+            frag
+        )
+        envs.add(env)
+        fragments.update({core_smi: num_heavy_atoms})
+        if (env, core_smi) in env_fragment_combo:
+            env_fragment_combo[(env, core_smi)]["freq"] += 1
+        else:
+            env_fragment_combo[(env, core_smi)] = {
+                "core_sma": core_sma,
+                "dist2": dist2,
+                "freq": 1,
+            }
 
     db_manager.insert(list(envs), fragments, env_fragment_combo, radius)
 
 
-def upload_to_db(q, db_manager, radius, total_chunks):
+def upload_to_db(q, db_type, db_path, ini_file, reset_db, radius, total_chunks):
+    db_manager = create_db_manager(db_type, db_path, ini_file, reset_db)
     with tqdm(total=total_chunks, desc="Uploading to database") as pbar:
         while True:
             data = q.get()
@@ -320,6 +184,7 @@ def upload_to_db(q, db_manager, radius, total_chunks):
                 break
             batch_insert_db(data, db_manager, radius)
             pbar.update(1)
+        db_manager.close()
 
 
 class DBManager(object):
@@ -327,15 +192,20 @@ class DBManager(object):
     def __init__(self, use_db, args):
         self.use_db = use_db
         self.args = args
-        self.db_manager = create_db_manager(
-            args.db_type, args.db_path, args.ini_file, args.reset_db
-        )
 
         # create thread to upload
         self.q = Queue()
-        self.upload_thread = Thread(
+        self.upload_thread = Process(
             target=upload_to_db,
-            args=(self.q, self.db_manager, args.radius, args.total_chunks),
+            args=(
+                self.q,
+                args.db_type,
+                args.db_path,
+                args.ini_file,
+                args.reset_db,
+                args.radius,
+                args.total_chunks,
+            ),
         )
         self.upload_thread.start()
 
@@ -346,11 +216,9 @@ class DBManager(object):
         self.q.put(data)
 
 
-def fragment_mols(args):
-    # remove duplicated smiles
-    args.input_file = preprocess_input_file(args.input_file)
+def result_to_db(args):
     total_rows = count_total_rows(args.input_file)
-    print(f"Start import {total_rows} rows to {args.db_type}")
+    print(f"Start import {total_rows} rows from {args.input_file} to {args.db_type}")
     print(f"Applied cpus: {args.ncpu}. Total cpus: {cpu_count()}")
     args.ncpu = min(args.ncpu, cpu_count())
     args.total_chunks = total_rows // args.chunk_size + 1
@@ -359,15 +227,13 @@ def fragment_mols(args):
     print(f"Start save results to db")
     chunks = read_chunks(args.input_file, args.chunk_size, args.sep)
     for chunk in chunks:
-        for frag in chunk.values:
-            db_manager.update_queue(frag)
+        db_manager.update_queue(chunk)
 
     db_manager.update_queue(None)
     db_manager.join()
     print(f"finished uploading {args.input_file} to {args.db_type} database")
 
 
-
 if __name__ == "__main__":
     args = parse_args()
-    fragment_mols(args)
+    result_to_db(args)
