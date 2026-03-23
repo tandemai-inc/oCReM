@@ -17,7 +17,7 @@ It contains the data of modified CrEM library and the original ChEMBL fragment l
 ## Data Access
 
 - **Original ChemBL fragment library**: [http://www.qsar4u.com/pages/crem.php](https://www.qsar4u.com/pages/crem.php)
-- **Download the oCaRem databases**:
+- **Download the oCReM databases**:
   - **ChEMBL22**:
     - [SQLite](https://zenodo.org/records/19107922/files/ocrem_chembl22_sqlite.tar.gz)
     - [PostgreSQL](https://zenodo.org/records/19107922/files/ocrem_chembl22_postgres.dump)
@@ -37,6 +37,8 @@ It contains the data of modified CrEM library and the original ChEMBL fragment l
 tar -xzf ocrem_chembl36_sqlite.tar.gz
 ```
 
+This will extract to a file named `chembl_36.db`.
+
 3. Use the extracted SQLite database file with the `create_db_manager` function:
 
 ```python
@@ -54,33 +56,37 @@ db_manager = create_db_manager('sqlite', db_path='path/to/chembl_36.db')
 
 ```bash
 createdb -U your_username your_database
+# With host and port specified:
+# createdb -h your_host -p your_port -U your_username your_database
 ```
 
 3. Import the dump file into your database:
 
 ```bash
 pg_restore -U your_username -d your_database ocrem_chembl36_postgres.dump
+# With host and port specified:
+# pg_restore -h your_host -p your_port -U your_username -d your_database ocrem_chembl36_postgres.dump
 ```
 
-4. Use it with the `create_db_manager` function:
+4. Create postgres database configuration file:
+
+create a `database.ini` file with the following format:
+
+```ini
+[database]
+host=your_host
+port=your_port
+user=your_username
+password=your_password
+database=your_database
+```
+
+5. Use it with the `create_db_manager` function:
 
 ```python
 from ta_gen.db import create_db_manager
 
 db_manager = create_db_manager('postgres', ini_file='path/to/database.ini')
-```
-
-#### Database Configuration File
-
-For PostgreSQL, create a `database.ini` file with the following format:
-
-```ini
-[database]
-host=localhost
-port=5432
-user=your_username
-password=your_password
-database=your_database
 ```
 
 ## Overview
@@ -113,7 +119,6 @@ oCReM/
 
 ## Usage
 
-
 ### Create Conda Environment
 
 Make sure you have installed Miniconda.
@@ -122,7 +127,6 @@ Make sure you have installed Miniconda.
 conda env create -f environment.yml
 conda activate crem
 ```
-
 
 ### 1. Molecular Fragmentation
 
@@ -156,11 +160,11 @@ Create a configuration file (`test.ini`) with the following format:
 
 ```ini
 [database]
-host=YOUR_HOST
-port=YOUR_PORT
-user=YOUR_USER
-password=YOUR_PASSWORD
-database=YOUR_DATABASE
+host=your_host
+port=your_port
+user=your_username
+password=your_password
+database=your_database
 ```
 
 ##### Command
