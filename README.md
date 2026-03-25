@@ -87,12 +87,14 @@ c1ccccc1
 ```
 
 #### Fragment to File
+Generate fragments for each molecule in the input file and save them to a CSV file.
 
 ```bash
 python ta_gen/bin/fragmentation.py --input test.smi --out test_frag.csv --mode 0 --ncpu 10 --radius 3
 ```
 
 #### Fragment to SQLite Database
+Generate fragments for each molecule in the input file and save them to a SQLite database. If the SQLite database file does not exist, it will be automatically created.
 
 ```bash
 python ta_gen/bin/fragmentation.py --input test.smi --mode 0 --ncpu 10 --radius 3 --use_db --db_type sqlite --db_path test.db
@@ -114,6 +116,7 @@ database=your_database
 ```
 
 ##### Command
+Generate fragments for each molecule in the input file and save them to a PostgreSQL database. If the database does not exist, it will try to create it.
 
 ```bash
 python ta_gen/bin/fragmentation.py --input test.smi --mode 0 --ncpu 10 --radius 3 --use_db --db_type postgres --ini_file test.ini
