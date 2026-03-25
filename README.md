@@ -24,71 +24,6 @@ It contains the data of modified CrEM library and the original ChEMBL fragment l
   - **ChEMBL36**:
     - [SQLite](https://zenodo.org/records/19107922/files/ocrem_chembl_36_sqlite.tar.gz)
     - [PostgreSQL](https://zenodo.org/records/19107922/files/ocrem_chembl36_postgres.dump)
-  
-
-### Using the oCReM Databases
-
-#### SQLite Database
-
-1. Download the SQLite database tar.gz file (e.g., `ocrem_chembl36_sqlite.tar.gz`)
-2. Extract the tar.gz file:
-
-```bash
-tar -xzf ocrem_chembl36_sqlite.tar.gz
-```
-
-This will extract to a file named `chembl_36.db`.
-
-3. Use the extracted SQLite database file with the `create_db_manager` function:
-
-```python
-from ta_gen.db import create_db_manager
-
-db_manager = create_db_manager('sqlite', db_path='path/to/chembl_36.db')
-```
-
-#### PostgreSQL Database
-
-**Note: Make sure you have PostgreSQL installed before proceeding.**
-
-1. Download the PostgreSQL dump file (e.g., `ocrem_chembl36_postgres.dump`)
-2. Create a new PostgreSQL database:
-
-```bash
-createdb -U your_username your_database
-# With host and port specified:
-# createdb -h your_host -p your_port -U your_username your_database
-```
-
-3. Import the dump file into your database:
-
-```bash
-pg_restore -U your_username -d your_database ocrem_chembl36_postgres.dump
-# With host and port specified:
-# pg_restore -h your_host -p your_port -U your_username -d your_database ocrem_chembl36_postgres.dump
-```
-
-4. Create postgres database configuration file:
-
-create a `database.ini` file with the following format:
-
-```ini
-[database]
-host=your_host
-port=your_port
-user=your_username
-password=your_password
-database=your_database
-```
-
-5. Use it with the `create_db_manager` function:
-
-```python
-from ta_gen.db import create_db_manager
-
-db_manager = create_db_manager('postgres', ini_file='path/to/database.ini')
-```
-
 ## Overview
 
 oCReM (optimized Chemical Reassembly) is a framework for fragment-based molecular design that includes:
@@ -119,6 +54,15 @@ oCReM/
 
 ## Usage
 
+### Clone the Repository
+
+First, clone the oCReM repository:
+
+```bash
+git clone https://github.com/your-username/oCReM.git
+cd oCReM
+```
+
 ### Create Conda Environment
 
 Make sure you have installed Miniconda.
@@ -126,6 +70,8 @@ Make sure you have installed Miniconda.
 ```bash
 conda env create -f environment.yml
 conda activate crem
+# Set Python path to include the project root
+export PYTHONPATH=$PYTHONPATH:$(pwd)
 ```
 
 ### 1. Molecular Fragmentation
@@ -141,12 +87,14 @@ c1ccccc1
 ```
 
 #### Fragment to File
+Generate fragments for each molecule in the input file and save them to a CSV file.
 
 ```bash
 python ta_gen/bin/fragmentation.py --input test.smi --out test_frag.csv --mode 0 --ncpu 10 --radius 3
 ```
 
 #### Fragment to SQLite Database
+Generate fragments for each molecule in the input file and save them to a SQLite database. If the SQLite database file does not exist, it will be automatically created.
 
 ```bash
 python ta_gen/bin/fragmentation.py --input test.smi --mode 0 --ncpu 10 --radius 3 --use_db --db_type sqlite --db_path test.db
@@ -168,6 +116,7 @@ database=your_database
 ```
 
 ##### Command
+Generate fragments for each molecule in the input file and save them to a PostgreSQL database. If the database does not exist, it will try to create it.
 
 ```bash
 python ta_gen/bin/fragmentation.py --input test.smi --mode 0 --ncpu 10 --radius 3 --use_db --db_type postgres --ini_file test.ini
@@ -218,6 +167,69 @@ db_manager = create_db_manager('sqlite', db_path='replacements.db')
 # For PostgreSQL, use:
 # db_manager = create_db_manager('postgres', ini_file='replacements.ini')
 mols = list(link_mols(m1, m2, db_manager))
+```
+
+### 3. Using the oCReM Databases
+
+#### SQLite Database
+
+1. Download the SQLite database tar.gz file (e.g., `ocrem_chembl36_sqlite.tar.gz`)
+2. Extract the tar.gz file:
+
+```bash
+tar -xzf ocrem_chembl36_sqlite.tar.gz
+```
+
+This will extract to a file named `chembl_36.db`.
+
+3. Use the extracted SQLite database file with the `create_db_manager` function:
+
+```python
+from ta_gen.db import create_db_manager
+
+db_manager = create_db_manager('sqlite', db_path='path/to/chembl_36.db')
+```
+
+#### PostgreSQL Database
+
+**Note: Make sure you have PostgreSQL installed before proceeding.**
+
+1. Download the PostgreSQL dump file (e.g., `ocrem_chembl36_postgres.dump`)
+2. Create a new PostgreSQL database:
+
+```bash
+createdb -U your_username your_database
+# With host and port specified:
+# createdb -h your_host -p your_port -U your_username your_database
+```
+
+3. Import the dump file into your database:
+
+```bash
+pg_restore -U your_username -d your_database ocrem_chembl36_postgres.dump
+# With host and port specified:
+# pg_restore -h your_host -p your_port -U your_username -d your_database ocrem_chembl36_postgres.dump
+```
+
+4. Create PostgreSQL database configuration file:
+
+Create a `database.ini` file with the following format:
+
+```ini
+[database]
+host=your_host
+port=your_port
+user=your_username
+password=your_password
+database=your_database
+```
+
+5. Use it with the `create_db_manager` function:
+
+```python
+from ta_gen.db import create_db_manager
+
+db_manager = create_db_manager('postgres', ini_file='path/to/database.ini')
 ```
 
 ## Examples
