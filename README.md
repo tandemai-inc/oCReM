@@ -59,7 +59,7 @@ oCReM/
 First, clone the oCReM repository:
 
 ```bash
-git clone https://github.com/your-username/oCReM.git
+git clone git@github.com:tandemai-inc/oCReM.git
 cd oCReM
 ```
 
