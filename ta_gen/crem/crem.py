@@ -5,7 +5,6 @@
 import os
 import random
 import re
-import sqlite3
 import sys
 from collections import defaultdict
 from itertools import product
@@ -14,7 +13,7 @@ from multiprocessing import Pool, cpu_count
 from rdkit import Chem, RDLogger
 from rdkit.Chem import AllChem, rdMMPA
 
-from ta_gen.utils.mol_context import (combine_core_env_to_rxn_smarts,
+from ta_gen.crem.mol_context import (combine_core_env_to_rxn_smarts,
                                       get_canon_context_core, patt_remove_map)
 
 cycle_pattern = re.compile("[a-zA-Z\]][1-9]+")
