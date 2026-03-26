@@ -16,7 +16,7 @@ from rdkit.Chem import rdMMPA
 from tqdm import tqdm
 
 from ta_gen.db import create_db_manager
-from ta_gen.utils.mol_context import (combine_core_env_to_rxn_smarts,
+from ta_gen.crem.mol_context import (combine_core_env_to_rxn_smarts,
                                       get_std_context_core_permutations)
 
 
