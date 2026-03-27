@@ -13,7 +13,7 @@ from multiprocessing import Pool, cpu_count
 from rdkit import Chem, RDLogger
 from rdkit.Chem import AllChem, rdMMPA
 
-from ta_gen.crem.mol_context import (combine_core_env_to_rxn_smarts,
+from ta_gen.utils.mol_context import (combine_core_env_to_rxn_smarts,
                                       get_canon_context_core, patt_remove_map)
 
 cycle_pattern = re.compile("[a-zA-Z\]][1-9]+")
@@ -381,28 +381,28 @@ def __gen_replacements(
     **kwargs,
 ):
 
-    link = False
+    # link = False
     if not isinstance(mol1, Chem.Mol):
         raise StopIteration(
             "The first molecule in __gen_replacement always must be specified"
         )
-    if isinstance(mol1, Chem.Mol) and isinstance(mol2, Chem.Mol):
-        link = True
+    # if isinstance(mol1, Chem.Mol) and isinstance(mol2, Chem.Mol):
+    #     link = True
 
-    if link:
-        f = __fragment_mol_link(
-            mol1=mol1,
-            mol2=mol2,
-            radius=radius,
-            protected_ids_1=protected_ids_1,
-            protected_ids_2=protected_ids_2,
-        )
-        mol = Chem.CombineMols(mol1, mol2)
-    else:
-        mol = mol1
-        f = __fragment_mol(
-            mol, radius, protected_ids=protected_ids_1, symmetry_fixes=symmetry_fixes
-        )
+    # if link:
+    #     f = __fragment_mol_link(
+    #         mol1=mol1,
+    #         mol2=mol2,
+    #         radius=radius,
+    #         protected_ids_1=protected_ids_1,
+    #         protected_ids_2=protected_ids_2,
+    #     )
+    #     mol = Chem.CombineMols(mol1, mol2)
+    # else:
+    mol = mol1
+    f = __fragment_mol(
+        mol, radius, protected_ids=protected_ids_1, symmetry_fixes=symmetry_fixes
+    )
 
     if not f:
         return
@@ -461,9 +461,9 @@ def __gen_replacements(
                     if return_frag_smi_only:
                         yield core_smi
                     else:
-                        if link:
-                            yield frag_sma, core_sma, freq, ids[0], ids[1]
-                        else:
+                        # if link:
+                        #     yield frag_sma, core_sma, freq, ids[0], ids[1]
+                        # else:
                             yield frag_sma, core_sma, freq, ids[0]
                     if max_replacements is not None:
                         returned_values += 1
@@ -483,9 +483,9 @@ def __gen_replacements(
                 if return_frag_smi_only:
                     yield core_smi
                 else:
-                    if link:
-                        yield (frag_sma, core_sma, freq, ids[0], ids[1])
-                    else:
+                    # if link:
+                    #     yield (frag_sma, core_sma, freq, ids[0], ids[1])
+                    # else:
                         yield (frag_sma, core_sma, freq, ids[0])
 
 
