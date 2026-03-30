@@ -101,6 +101,7 @@ def gen_new_replacements(  # noqa: C901
     num_cpus,
     radius,
     dist=None,
+    min_freq=0,
     products=None,
     return_core=False,
 ):
@@ -125,6 +126,7 @@ def gen_new_replacements(  # noqa: C901
                 max_inc,
                 max_replacements,
                 radius,
+                min_freq=min_freq,
             )
             for smi, new_core_smi in p.starmap(
                 _zip_new_replacement, new_replacement_generator, chunksize=100,
@@ -140,6 +142,8 @@ def mutate_mol(
     radius=3,
     min_inc=-2,
     max_inc=2,
+    dist= None,
+    min_freq=0,
     replace_ids=None,
     max_replacements=None,
     protected_ids=None,
@@ -188,6 +192,8 @@ def mutate_mol(
         max_replacements,
         num_cpus,
         radius,
+        dist=dist,
+        min_freq=min_freq,
     )
 
 
@@ -273,6 +279,8 @@ def mutate_mol_ch(
     radius=3,
     min_inc=-2,
     max_inc=2,
+    dist=None,
+    min_freq=0,
     max_replacements=None,
     replace_ids=None,
     protected_ids=None,
@@ -354,6 +362,8 @@ def mutate_mol_ch(
             max_replacements,
             ncores,
             radius=radius,
+            dist=dist,
+            min_freq=min_freq,
             products=products,
             return_core=True,
         )
@@ -410,9 +420,10 @@ def link_mol(
     mol2,
     db_manager,
     radius=3,
-    dist=None,
     min_inc=1,
     max_inc=2,
+    dist=None,
+    min_freq=0,
     max_replacements=None,
     replace_ids_1=None,
     replace_ids_2=None,
@@ -471,5 +482,7 @@ def link_mol(
         max_replacements,
         num_cpus,
         radius,
+        dist=dist,
+        min_freq=min_freq,
     )
 
