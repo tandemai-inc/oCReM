@@ -4,14 +4,13 @@
 import re
 from copy import deepcopy
 from rdkit import Chem
-from collections import defaultdict
 from multiprocessing import Pool, cpu_count
 import random
 from functools import partial
 
 
 from ta_gen.utils.fragment_utils import fragment_mol, fragment_mol_link
-
+from ta_gen.crem_utils.mol_context import combine_core_env_to_rxn_smarts
 
 def update_protected_ids(mol, protected_ids, replace_ids):
     protected_ids = set(protected_ids) if protected_ids else set()
@@ -149,128 +148,42 @@ def mutate_mol(
     protected_ids=None,
     symmetry_fixes=False,
     num_cpus=1,
-    attach_id=None,
-    attach_neighbor_id=None,
 ):
-    protected_ids = update_protected_ids(mol, protected_ids, replace_ids)
-    print("protected_ids", protected_ids)
-    print("radius", radius)
+    products = {Chem.MolToSmiles(mol)}
 
-    fragments = fragment_mol(
+    protected_ids = update_protected_ids(mol, protected_ids, replace_ids)
+
+    f = fragment_mol(
         mol, radius, protected_ids=protected_ids, symmetry_fixes=symmetry_fixes
     )  # [(env smiles, core smiles, list of atom ids)]
-    print("fragments", fragments)
 
-    valid_fragments = []
-    for item in fragments:
-        frag = item[1]
-        num_heavy_atoms = Chem.MolFromSmiles(frag).GetNumHeavyAtoms()
+    valid_f = []
+    for t in f:
+        num_heavy_atoms = Chem.MolFromSmiles(t[1]).GetNumHeavyAtoms()
         if num_heavy_atoms == 0:
-            valid_fragments.append(item)
+            valid_f.append(t)
 
-    print(f"valid fragments: {valid_fragments}")
-
-    mol_copy = deepcopy(mol)
-    if attach_id:
-        atom = mol_copy.GetAtomWithIdx(attach_id)
-        if atom.GetAtomicNum() == 1:
+    print("valid f", valid_f)
+    for env_smarts, core_smi, atom_ids in valid_f:
+        for atom_id in atom_ids:
+            side_chain = deepcopy(mol)
+            side_chain = Chem.AddHs(side_chain)
+            atom = side_chain.GetAtomWithIdx(atom_id)
             atom.SetAtomicNum(0)
             atom.SetAtomMapNum(1)
-    elif attach_neighbor_id:
-        for a in mol_copy.GetAtomWithIdx(attach_neighbor_id).GetNeighbors():
-            if a.GetAtomicNum() == 1:  # set H atom to *1
-                a.SetAtomicNum(0)
-                a.SetAtomMapNum(1)
-                break
-
-    yield from gen_new_replacements(
-        valid_fragments,
-        mol_copy,
-        db_manager,
-        min_inc,
-        max_inc,
-        max_replacements,
-        num_cpus,
-        radius,
-        dist=dist,
-        min_freq=min_freq,
-    )
-
-
-def mol_to_smarts(mol, keep_h=True):
-    # e.g. [H]-[CH2]-[*] -> [H]-[CH3]-[*]
-
-    mol = Chem.Mol(mol)
-    mol.UpdatePropertyCache()
-
-    # change the isotope to 42
-    for atom in mol.GetAtoms():
-        if keep_h:
-            s = sum(na.GetAtomicNum() == 1 for na in atom.GetNeighbors())
-            if s:
-                atom.SetNumExplicitHs(atom.GetTotalNumHs() + s)
-        atom.SetIsotope(42)
-
-    # print out the smiles - all the atom attributes will be fully specified
-    smarts = Chem.MolToSmiles(mol, isomericSmiles=True, allBondsExplicit=True)
-    # remove the 42 isotope labels
-    smarts = re.sub(r"\[42", "[", smarts)
-
-    return smarts
-
-
-def combine_core_env_to_rxn_smarts(core, env, keep_h=True):  # noqa: C901
-    if isinstance(env, str):
-        m_env = Chem.MolFromSmiles(env, sanitize=False)
-    if isinstance(core, str):
-        m_frag = Chem.MolFromSmiles(core, sanitize=False)
-
-    backup_atom_map = "backupAtomMap"
-
-    # put all atom maps to atom property and remove them
-    for a in m_env.GetAtoms():
-        atom_map = a.GetAtomMapNum()
-        if atom_map:
-            a.SetIntProp(backup_atom_map, atom_map)
-            a.SetAtomMapNum(0)
-    for a in m_frag.GetAtoms():
-        atom_map = a.GetAtomMapNum()
-        if atom_map:
-            a.SetIntProp(backup_atom_map, atom_map)
-            a.SetAtomMapNum(0)
-
-    # set canonical ranks for atoms in env without maps
-    m_env.UpdatePropertyCache()
-    for atom_id, rank in zip(
-        [a.GetIdx() for a in m_env.GetAtoms()], list(Chem.CanonicalRankAtoms(m_env))
-    ):
-        a = m_env.GetAtomWithIdx(atom_id)
-        if not a.HasProp(backup_atom_map):
-            a.SetAtomMapNum(rank + 1)  # because ranks start from 0
-
-    m = Chem.RWMol(Chem.CombineMols(m_frag, m_env))
-
-    links = defaultdict(list)  # pairs of atom ids to create bonds
-    att_to_remove = []  # ids of att points to remove
-    for a in m.GetAtoms():
-        if a.HasProp(backup_atom_map):
-            i = a.GetIntProp(backup_atom_map)
-            links[i].append(a.GetNeighbors()[0].GetIdx())
-            att_to_remove.append(a.GetIdx())
-
-    for i, j in links.values():
-        m.AddBond(i, j, Chem.BondType.SINGLE)
-
-    for i in sorted(att_to_remove, reverse=True):
-        m.RemoveAtom(i)
-
-    comb_sma = mol_to_smarts(m, keep_h)
-
-    patt_remove_h = re.compile(r"(?<!\[H)H[1-9]*(?=:[0-9])")
-
-    if not keep_h:  # remove H only in mapped env part
-        comb_sma = patt_remove_h.sub("", comb_sma)
-    return comb_sma
+            yield from gen_new_replacements(
+                [(env_smarts, core_smi, atom_ids)],
+                side_chain,
+                db_manager,
+                min_inc,
+                max_inc,
+                max_replacements,
+                num_cpus,
+                radius=radius,
+                dist=dist,
+                min_freq=min_freq,
+                products=products,
+            )
 
 
 def mutate_mol_ch(
@@ -285,7 +198,7 @@ def mutate_mol_ch(
     replace_ids=None,
     protected_ids=None,
     symmetry_fixes=False,
-    ncores=1,
+    num_cpus=1,
 ):
     products = {Chem.MolToSmiles(mol)}
 
@@ -360,12 +273,11 @@ def mutate_mol_ch(
             min_inc,
             max_inc,
             max_replacements,
-            ncores,
+            num_cpus,
             radius=radius,
             dist=dist,
             min_freq=min_freq,
             products=products,
-            return_core=True,
         )
 
 
@@ -379,8 +291,8 @@ def grow_mol(
     replace_ids=None,
     symmetry_fixes=False,
     num_cpus=1,
-    attach_id=None,
 ):
+    mol = Chem.AddHs(mol)
     protected_ids = set()
     if replace_ids:
         ids = set()  # ids if replaceable Hs
@@ -409,8 +321,6 @@ def grow_mol(
         protected_ids=protected_ids,
         num_cpus=num_cpus,
         symmetry_fixes=symmetry_fixes,
-        attach_id=attach_id,
-        attach_neighbor_id=replace_ids[0] if replace_ids else None,
     )
 
 
