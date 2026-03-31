@@ -1,16 +1,17 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 
+import random
 import re
 from copy import deepcopy
-from rdkit import Chem
-from multiprocessing import Pool, cpu_count
-import random
 from functools import partial
+from multiprocessing import Pool, cpu_count
 
+from rdkit import Chem
 
-from ta_gen.utils.fragment_utils import fragment_mol, fragment_mol_link
 from ta_gen.crem_utils.mol_context import combine_core_env_to_rxn_smarts
+from ta_gen.utils.fragment_utils import fragment_mol, fragment_mol_link
+
 
 def update_protected_ids(mol, protected_ids, replace_ids):
     protected_ids = set(protected_ids) if protected_ids else set()
@@ -19,12 +20,18 @@ def update_protected_ids(mol, protected_ids, replace_ids):
         ids = set()
         for i in replace_ids:
             ids.update(
-                a.GetIdx() for a in mol.GetAtomWithIdx(i).GetNeighbors() if a.GetAtomicNum() == 1
+                a.GetIdx()
+                for a in mol.GetAtomWithIdx(i).GetNeighbors()
+                if a.GetAtomicNum() == 1
             )
         ids = (
-            set(a.GetIdx() for a in mol.GetAtoms()).difference(ids).difference(replace_ids)
+            set(a.GetIdx() for a in mol.GetAtoms())
+            .difference(ids)
+            .difference(replace_ids)
         )  # ids which should be protected
-        protected_ids.update(ids)  # since protected_ids has a higher priority add them anyway
+        protected_ids.update(
+            ids
+        )  # since protected_ids has a higher priority add them anyway
 
     protected_ids = sorted(protected_ids)
     return protected_ids
@@ -69,7 +76,16 @@ def __get_replacements(
 
 
 def get_core_smi_replacements(
-    db_manager, env, core_smi, dist, min_inc, max_inc, max_replacements, radius, min_freq=0, **kwargs
+    db_manager,
+    env,
+    core_smi,
+    dist,
+    min_inc,
+    max_inc,
+    max_replacements,
+    radius,
+    min_freq=0,
+    **kwargs,
 ):
     num_heavy_atoms = Chem.MolFromSmiles(core_smi).GetNumHeavyAtoms()
     min_atoms = num_heavy_atoms + min_inc
@@ -128,7 +144,9 @@ def gen_new_replacements(  # noqa: C901
                 min_freq=min_freq,
             )
             for smi, new_core_smi in p.starmap(
-                _zip_new_replacement, new_replacement_generator, chunksize=100,
+                _zip_new_replacement,
+                new_replacement_generator,
+                chunksize=100,
             ):
                 if smi and smi not in products:
                     products.add(smi)
@@ -141,7 +159,7 @@ def mutate_mol_for_grow(
     radius=3,
     min_inc=-2,
     max_inc=2,
-    dist= None,
+    dist=None,
     min_freq=0,
     replace_ids=None,
     max_replacements=None,
@@ -275,7 +293,9 @@ def mutate_mol(
                     labels = []
                     for k, v in dummy_idx_bond_idx_map.items():
                         cut_bonds.append(
-                            mol.GetBondBetweenAtoms(core_match[v[0]], core_match[v[1]]).GetIdx()
+                            mol.GetBondBetweenAtoms(
+                                core_match[v[0]], core_match[v[1]]
+                            ).GetIdx()
                         )
                         labels.append((k, k))
                     frag_mol = Chem.FragmentOnBonds(
@@ -342,7 +362,9 @@ def grow_mol(
                     for a in mol.GetAtomWithIdx(i).GetNeighbors()
                     if a.GetAtomicNum() == 1
                 )
-        ids = set(a.GetIdx() for a in mol.GetAtoms() if a.GetAtomicNum() == 1).difference(
+        ids = set(
+            a.GetIdx() for a in mol.GetAtoms() if a.GetAtomicNum() == 1
+        ).difference(
             ids
         )  # ids of Hs to protect
         protected_ids.update(ids)  # Hs should be protected
@@ -392,7 +414,9 @@ def link_mols(
                     for a in mol1.GetAtomWithIdx(i).GetNeighbors()
                     if a.GetAtomicNum() == 1
                 )
-        ids = set(a.GetIdx() for a in mol1.GetAtoms() if a.GetAtomicNum() == 1).difference(
+        ids = set(
+            a.GetIdx() for a in mol1.GetAtoms() if a.GetAtomicNum() == 1
+        ).difference(
             ids
         )  # ids of Hs to protect
         protected_ids_1.update(ids)  # Hs should be protected
@@ -409,13 +433,19 @@ def link_mols(
                     for a in mol2.GetAtomWithIdx(i).GetNeighbors()
                     if a.GetAtomicNum() == 1
                 )
-        ids = set(a.GetIdx() for a in mol2.GetAtoms() if a.GetAtomicNum() == 1).difference(
+        ids = set(
+            a.GetIdx() for a in mol2.GetAtoms() if a.GetAtomicNum() == 1
+        ).difference(
             ids
         )  # ids of Hs to protect
         protected_ids_2.update(ids)  # Hs should be protected
 
     fragments = fragment_mol_link(
-        mol1, mol2, radius, protected_ids_1=protected_ids_1, protected_ids_2=protected_ids_2,
+        mol1,
+        mol2,
+        radius,
+        protected_ids_1=protected_ids_1,
+        protected_ids_2=protected_ids_2,
     )  # [(env smiles, core smiles, list of atom ids)]
 
     for env_smarts, core_smi, atom_ids_1, atom_ids_2 in fragments:

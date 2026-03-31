@@ -2,11 +2,15 @@
 # -*- coding:utf-8 -*-
 
 
-from rdkit import Chem
-from rdkit.Chem import rdMMPA
-from ta_gen.crem_utils.mol_context import get_canon_context_core, patt_remove_map, patt_remove_brackets
 from collections import defaultdict
 from itertools import product
+
+from rdkit import Chem
+from rdkit.Chem import rdMMPA
+
+from ta_gen.crem_utils.mol_context import (get_canon_context_core,
+                                           patt_remove_brackets,
+                                           patt_remove_map)
 
 
 def get_atom_prop(molecule, prop="Index"):
@@ -39,18 +43,27 @@ def __extend_output_by_equivalent_atoms(mol, output):
         ):  # if all atoms of a fragment have equivalent atoms
             smi = patt_remove_map.sub("", item[1])
             smi = patt_remove_brackets.sub("", smi)
-            ids_list = [set(i) for i in mol.GetSubstructMatches(Chem.MolFromSmarts(smi))]
+            ids_list = [
+                set(i) for i in mol.GetSubstructMatches(Chem.MolFromSmarts(smi))
+            ]
             for ids_matched in ids_list:
                 for ids_eq in product(
                     *(atom_eq[i] for i in item[2])
                 ):  # enumerate all combinations of equivalent atoms
                     if ids_matched == set(ids_eq):
-                        extended_output.append((item[0], item[1], tuple(sorted(ids_eq))))
+                        extended_output.append(
+                            (item[0], item[1], tuple(sorted(ids_eq)))
+                        )
     return extended_output
 
 
 def fragment_mol(  # noqa: C901
-    mol, radius=3, return_ids=True, keep_stereo=False, protected_ids=None, symmetry_fixes=False
+    mol,
+    radius=3,
+    return_ids=True,
+    keep_stereo=False,
+    protected_ids=None,
+    symmetry_fixes=False,
 ):
     if protected_ids:
         return_ids = True
@@ -109,7 +122,9 @@ def fragment_mol(  # noqa: C901
     return list(output)  # list of tuples (env smiles, core smiles, list of atom ids)
 
 
-def __fragment_link_one_mol(mol, return_ids=True, protected_ids=None, keep_stereo=False):
+def __fragment_link_one_mol(
+    mol, return_ids=True, protected_ids=None, keep_stereo=False
+):
     if return_ids:
         for atom in mol.GetAtoms():
             atom.SetIntProp("Index", atom.GetIdx())
@@ -146,7 +161,6 @@ def __fragment_link_one_mol(mol, return_ids=True, protected_ids=None, keep_stere
         else:
             ls.append([a, ids])
     return ls
-
 
 
 def fragment_mol_link(
