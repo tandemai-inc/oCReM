@@ -97,7 +97,9 @@ CC(=O)Oc1ccccc1C(=O)O
 Generate fragments for each molecule in the input file and save them to a CSV file.
 
 ```bash
-python ta_gen/bin/fragmentation.py --input test.smi --out test_frag.csv --mode 0 --ncpu 10 --radius 3
+python ta_gen/bin/fragmentation.py --input test.smi --out test_frag_1.csv --mode 0 --ncpu 10 --radius 1
+python ta_gen/bin/fragmentation.py --input test.smi --out test_frag_2.csv --mode 0 --ncpu 10 --radius 2
+python ta_gen/bin/fragmentation.py --input test.smi --out test_frag_3.csv --mode 0 --ncpu 10 --radius 3
 ```
 
 #### Fragment to SQLite Database
