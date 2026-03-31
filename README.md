@@ -150,7 +150,7 @@ m = Chem.MolFromSmiles('OCCOc1ccccc1')  # toluene
 db_manager = create_db_manager('sqlite', db_path='test.db')
 # For PostgreSQL, use:
 # db_manager = create_db_manager('postgres', ini_file='replacements.ini')
-mols = list(mutate_mol(m, db_manager, max_size=1))
+mols = list(mutate_mol(m, db_manager, max_inc=1))
 ```
 
 #### Grow Molecule
