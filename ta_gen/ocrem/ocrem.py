@@ -135,7 +135,7 @@ def gen_new_replacements(  # noqa: C901
                     yield return_format(smi, new_core_smi)
 
 
-def mutate_mol(
+def mutate_mol_for_grow(
     mol,
     db_manager,
     radius=3,
@@ -186,7 +186,42 @@ def mutate_mol(
             )
 
 
-def mutate_mol_ch(
+def remove_atoms_and_keep_attachments(mol, atoms_to_remove):
+    emol = Chem.EditableMol(mol)
+
+    # Store bond information for attachment points
+    bonds_to_break = []
+    for atom_idx in atoms_to_remove:
+        atom = mol.GetAtomWithIdx(atom_idx)
+        for neighbor in atom.GetNeighbors():
+            neighbor_idx = neighbor.GetIdx()
+            if neighbor_idx not in atoms_to_remove:
+                # This is a bond connecting the "keep part" and "remove part"
+                bonds_to_break.append((neighbor_idx, atom_idx))
+
+    # 3. Use RDKit's special functions to break bonds and add Dummy Atoms (*)
+    # ReplaceCore logic is complex, here we manually break bonds for precision
+    # We iterate through the boundary bonds found earlier, break them and add *
+
+    fragmented_mol = Chem.RWMol(mol)
+    for neighbor_idx, to_remove_idx in bonds_to_break:
+        # Add a dummy atom (*)
+        dummy_idx = fragmented_mol.AddAtom(Chem.Atom(0))
+        # Create chemical bond between the retained atom and the dummy atom
+        bond = mol.GetBondBetweenAtoms(neighbor_idx, to_remove_idx)
+        fragmented_mol.AddBond(neighbor_idx, dummy_idx, bond.GetBondType())
+
+    # 4. Finally remove all target atoms
+    # Must remove from largest index to smallest, otherwise indices will be messed up
+    for idx in sorted(atoms_to_remove, reverse=True):
+        fragmented_mol.RemoveAtom(idx)
+
+    # 5. Convert to SMILES (result may contain multiple fragments)
+    result_smiles = Chem.MolToSmiles(fragmented_mol.GetMol())
+    return result_smiles
+
+
+def mutate_mol(
     mol,
     db_manager,
     radius=3,
@@ -211,60 +246,64 @@ def mutate_mol_ch(
     print(f)
 
     for env_smarts, core_smi, atom_ids in f:
-        print(env_smarts, core_smi, atom_ids)
+        if core_smi.count("*") == 1:
+            side_chain_smi = remove_atoms_and_keep_attachments(mol, atom_ids)
+            # replaced_string = re.sub(r"\*", r"\[*:1\]", side_chain_smi)  # [1*] -> [*:1]
+            side_chain = Chem.MolFromSmiles(side_chain_smi)
+            for atom in side_chain.GetAtoms():
+                if atom.GetAtomicNum() == 0:
+                    atom.SetAtomMapNum(1)
+        else:
+            smarts = combine_core_env_to_rxn_smarts(core_smi, env_smarts, keep_h=False)
+            smarts_mol = Chem.MolFromSmarts(smarts)
+            total_match = mol.GetSubstructMatch(smarts_mol)
+            core_mol = Chem.MolFromSmarts(core_smi)
+            dummy_idx_bond_idx_map = {}
+            for atom in core_mol.GetAtoms():
+                if atom.GetAtomicNum() == 0:
+                    neighbor = atom.GetNeighbors()
+                    dummy_idx_bond_idx_map[atom.GetAtomMapNum()] = [
+                        atom.GetIdx(),
+                        neighbor[0].GetIdx(),
+                    ]
 
-        smarts = combine_core_env_to_rxn_smarts(core_smi, env_smarts, keep_h=False)
+            core_matches = mol.GetSubstructMatches(core_mol)
 
-        smarts_mol = Chem.MolFromSmarts(smarts)
+            frag_mol = None
 
-        total_match = mol.GetSubstructMatch(smarts_mol)
-
-        core_mol = Chem.MolFromSmarts(core_smi)
-
-        dummy_idx_bond_idx_map = {}
-        for atom in core_mol.GetAtoms():
-            if atom.GetAtomicNum() == 0:
-                neighbor = atom.GetNeighbors()
-                dummy_idx_bond_idx_map[atom.GetAtomMapNum()] = [
-                    atom.GetIdx(),
-                    neighbor[0].GetIdx(),
-                ]
-
-        core_matches = mol.GetSubstructMatches(core_mol)
-
-        frag_mol = None
-
-        for core_match in core_matches:
-            if set(core_match).issubset(set(total_match)):
-                cut_bonds = []
-                labels = []
-                for k, v in dummy_idx_bond_idx_map.items():
-                    cut_bonds.append(
-                        mol.GetBondBetweenAtoms(core_match[v[0]], core_match[v[1]]).GetIdx()
+            for core_match in core_matches:
+                if set(core_match).issubset(set(total_match)):
+                    cut_bonds = []
+                    labels = []
+                    for k, v in dummy_idx_bond_idx_map.items():
+                        cut_bonds.append(
+                            mol.GetBondBetweenAtoms(core_match[v[0]], core_match[v[1]]).GetIdx()
+                        )
+                        labels.append((k, k))
+                    frag_mol = Chem.FragmentOnBonds(
+                        mol, cut_bonds, addDummies=True, dummyLabels=labels
                     )
-                    labels.append((k, k))
-                frag_mol = Chem.FragmentOnBonds(
-                    mol, cut_bonds, addDummies=True, dummyLabels=labels
-                )
-                break
+                    break
 
-        if not frag_mol:
+            if not frag_mol:
+                continue
+
+            frag_smi = Chem.MolToSmiles(frag_mol)
+
+            frag_smi_list = frag_smi.split(".")
+
+            side_chain_smi_list = []
+
+            for s in frag_smi_list:
+                if s.count("*") == 1:
+                    replaced_string = re.sub(r"(\d+)\*", r"*:\1", s)  # [1*] -> [*:1]
+                    side_chain_smi_list.append(replaced_string)
+
+            side_chain_smi = ".".join(side_chain_smi_list)
+            side_chain = Chem.MolFromSmiles(side_chain_smi)
+
+        if not side_chain_smi:
             continue
-
-        frag_smi = Chem.MolToSmiles(frag_mol)
-
-        frag_smi_list = frag_smi.split(".")
-
-        side_chain_smi_list = []
-
-        for s in frag_smi_list:
-            if s.count("*") == 1:
-                replaced_string = re.sub(r"(\d+)\*", r"*:\1", s)  # [1*] -> [*:1]
-                side_chain_smi_list.append(replaced_string)
-
-        side_chain_smi = ".".join(side_chain_smi_list)
-
-        side_chain = Chem.MolFromSmiles(side_chain_smi)
 
         yield from gen_new_replacements(
             [(env_smarts, core_smi, atom_ids)],
@@ -324,8 +363,7 @@ def grow_mol(
     )
 
 
-
-def link_mol(
+def link_mols(
     mol1,
     mol2,
     db_manager,
@@ -341,6 +379,9 @@ def link_mol(
     num_cpus=1,
     attach_id=None,
 ):
+    mol1 = Chem.AddHs(mol1)
+    mol2 = Chem.AddHs(mol2)
+
     protected_ids_1 = set()
     if replace_ids_1:
         ids = set()  # ids if replaceable Hs
@@ -380,19 +421,33 @@ def link_mol(
     )  # [(env smiles, core smiles, list of atom ids)]
     print("fragments", fragments)
 
-    mol = Chem.CombineMols(mol1, mol2)
-    mol_copy = deepcopy(mol)
+    for env_smarts, core_smi, atom_ids_1, atom_ids_2 in fragments:
+        side_chain_smi_1 = remove_atoms_and_keep_attachments(mol1, atom_ids_1)
+        # replaced_string = re.sub(r"\*", r"\[*:1\]", side_chain_smi_1)  # [1*] -> [*:1]
+        side_chain_1 = Chem.MolFromSmiles(side_chain_smi_1)
+        for atom in side_chain_1.GetAtoms():
+            if atom.GetAtomicNum() == 0:
+                atom.SetAtomMapNum(1)
 
-    yield from gen_new_replacements(
-        fragments,
-        mol_copy,
-        db_manager,
-        min_inc,
-        max_inc,
-        max_replacements,
-        num_cpus,
-        radius,
-        dist=dist,
-        min_freq=min_freq,
-    )
+        side_chain_smi_2 = remove_atoms_and_keep_attachments(mol2, atom_ids_2)
+        # replaced_string = re.sub(r"\*", r"\[*:1\]", side_chain_smi_2)  # [1*] -> [*:1]
+        side_chain_2 = Chem.MolFromSmiles(side_chain_smi_2)
+        for atom in side_chain_2.GetAtoms():
+            if atom.GetAtomicNum() == 0:
+                atom.SetAtomMapNum(2)
 
+        mol = Chem.CombineMols(side_chain_1, side_chain_2)
+        mol_copy = deepcopy(mol)
+
+        yield from gen_new_replacements(
+            [(env_smarts, core_smi, atom_ids_1, atom_ids_2)],
+            mol_copy,
+            db_manager,
+            min_inc,
+            max_inc,
+            max_replacements,
+            num_cpus,
+            radius,
+            dist=dist,
+            min_freq=min_freq,
+        )

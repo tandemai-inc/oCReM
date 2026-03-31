@@ -13,7 +13,7 @@ from multiprocessing import Pool, cpu_count
 from rdkit import Chem, RDLogger
 from rdkit.Chem import AllChem, rdMMPA
 
-from ta_gen.utils.mol_context import (combine_core_env_to_rxn_smarts,
+from ta_gen.crem_utils.mol_context import (combine_core_env_to_rxn_smarts,
                                       get_canon_context_core, patt_remove_map)
 
 cycle_pattern = re.compile("[a-zA-Z\]][1-9]+")
@@ -400,9 +400,9 @@ def __gen_replacements(
         mol = Chem.CombineMols(mol1, mol2)
     else:
         mol = mol1
-    f = __fragment_mol(
-        mol, radius, protected_ids=protected_ids_1, symmetry_fixes=symmetry_fixes
-    )
+        f = __fragment_mol(
+            mol, radius, protected_ids=protected_ids_1, symmetry_fixes=symmetry_fixes
+        )
 
     if not f:
         return
