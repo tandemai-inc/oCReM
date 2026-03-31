@@ -158,7 +158,7 @@ mols = list(grow_mol(m, db_manager))
 
 ```python
 from rdkit import Chem
-from ta_gen.ocrem.ocrem import link_mol
+from ta_gen.ocrem.ocrem import link_mols
 from ta_gen.db import create_db_manager
 
 m1 = Chem.MolFromSmiles('c1cc(OC)ccc1C')  # toluene
@@ -166,7 +166,7 @@ m2 = Chem.MolFromSmiles('NCC(=O)O')  # glycine
 db_manager = create_db_manager('sqlite', db_path='replacements.db')
 # For PostgreSQL, use:
 # db_manager = create_db_manager('postgres', ini_file='replacements.ini')
-mols = list(link_mol(m1, m2, db_manager))
+mols = list(link_mols(m1, m2, db_manager))
 ```
 
 ### 3. Using the oCReM Databases

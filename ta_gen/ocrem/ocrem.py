@@ -243,8 +243,6 @@ def mutate_mol(
         mol, radius, protected_ids=protected_ids, symmetry_fixes=symmetry_fixes
     )  # [(env smiles, core smiles, list of atom ids)]
 
-    print(f)
-
     for env_smarts, core_smi, atom_ids in f:
         if core_smi.count("*") == 1:
             side_chain_smi = remove_atoms_and_keep_attachments(mol, atom_ids)
@@ -419,7 +417,6 @@ def link_mols(
     fragments = fragment_mol_link(
         mol1, mol2, radius, protected_ids_1=protected_ids_1, protected_ids_2=protected_ids_2,
     )  # [(env smiles, core smiles, list of atom ids)]
-    print("fragments", fragments)
 
     for env_smarts, core_smi, atom_ids_1, atom_ids_2 in fragments:
         side_chain_smi_1 = remove_atoms_and_keep_attachments(mol1, atom_ids_1)
@@ -438,7 +435,6 @@ def link_mols(
 
         mol = Chem.CombineMols(side_chain_1, side_chain_2)
         mol_copy = deepcopy(mol)
-
         yield from gen_new_replacements(
             [(env_smarts, core_smi, atom_ids_1, atom_ids_2)],
             mol_copy,
