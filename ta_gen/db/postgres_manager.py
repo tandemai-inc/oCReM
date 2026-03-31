@@ -224,7 +224,9 @@ class PostGresManager(DBManager):
         # copy upsert_data to temp table
         buf = io.StringIO()
         for (env, core_smi), attr in env_fragment_combo.items():
-            buf.write(f"{env_ids[env]}\t{fragment_ids[core_smi]}\t{attr['core_sma']}\t{attr['dist2']}\t{attr['freq']}\n")
+            buf.write(
+                f"{env_ids[env]}\t{fragment_ids[core_smi]}\t{attr['core_sma']}\t{attr['dist2']}\t{attr['freq']}\n"
+            )
         buf.seek(0)
         self.cursor.execute(
             "CREATE TEMP TABLE tmp_ef (env_id BIGINT, fragment_id BIGINT, core_sma TEXT, dist2 SMALLINT, frequency BIGINT) ON COMMIT DROP"

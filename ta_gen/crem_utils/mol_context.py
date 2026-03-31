@@ -12,6 +12,7 @@ patt_remove_map = re.compile("\[\*\:[0-9]+\]")  # to change CC([*:1])O to CC([*]
 patt_remove_h = re.compile(
     "(?<!\[)H[1-9]*(?=:[0-9])"
 )  # to remove H after atoms with maps: [CH2:1] to [C:1], but not touching [H] or [nH]
+patt_remove_brackets = re.compile("\(\)")
 
 
 def __standardize_smiles_with_att_points(mol, keep_stereo=False):

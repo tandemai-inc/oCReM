@@ -81,22 +81,33 @@ export PYTHONPATH=$PYTHONPATH:$(pwd)
 The input file (`test.smi`) should contain one molecule per line in SMILES format:
 
 ```
-CC(=O)Oc1ccccc1C(=O)O
 CCO
+CC(=O)O
+CCOC(=O)C
 c1ccccc1
+Cc1ccccc1
+COc1ccccc1
+Oc1ccccc1
+Nc1ccccc1
+NCC(=O)O
+CC(=O)Oc1ccccc1C(=O)O
 ```
 
 #### Fragment to File
 Generate fragments for each molecule in the input file and save them to a CSV file.
 
 ```bash
-python ta_gen/bin/fragmentation.py --input test.smi --out test_frag.csv --mode 0 --ncpu 10 --radius 3
+python ta_gen/bin/fragmentation.py --input test.smi --out test_frag_1.csv --mode 0 --ncpu 10 --radius 1
+python ta_gen/bin/fragmentation.py --input test.smi --out test_frag_2.csv --mode 0 --ncpu 10 --radius 2
+python ta_gen/bin/fragmentation.py --input test.smi --out test_frag_3.csv --mode 0 --ncpu 10 --radius 3
 ```
 
 #### Fragment to SQLite Database
 Generate fragments for each molecule in the input file and save them to a SQLite database. If the SQLite database file does not exist, it will be automatically created.
 
 ```bash
+python ta_gen/bin/fragmentation.py --input test.smi --mode 0 --ncpu 10 --radius 1 --use_db --db_type sqlite --db_path test.db
+python ta_gen/bin/fragmentation.py --input test.smi --mode 0 --ncpu 10 --radius 2 --use_db --db_type sqlite --db_path test.db
 python ta_gen/bin/fragmentation.py --input test.smi --mode 0 --ncpu 10 --radius 3 --use_db --db_type sqlite --db_path test.db
 ```
 
@@ -119,6 +130,8 @@ database=your_database
 Generate fragments for each molecule in the input file and save them to a PostgreSQL database. If the database does not exist, it will try to create it.
 
 ```bash
+python ta_gen/bin/fragmentation.py --input test.smi --mode 0 --ncpu 10 --radius 1 --use_db --db_type postgres --ini_file test.ini
+python ta_gen/bin/fragmentation.py --input test.smi --mode 0 --ncpu 10 --radius 2 --use_db --db_type postgres --ini_file test.ini
 python ta_gen/bin/fragmentation.py --input test.smi --mode 0 --ncpu 10 --radius 3 --use_db --db_type postgres --ini_file test.ini
 ```
 
@@ -130,25 +143,25 @@ For detailed examples and step-by-step instructions, please refer to the Jupyter
 
 ```python
 from rdkit import Chem
-from ta_gen.crem.crem import mutate_mol
+from ta_gen.ocrem.ocrem import mutate_mol
 from ta_gen.db import create_db_manager
 
-m = Chem.MolFromSmiles('c1cc(OC)ccc1C')  # toluene
-db_manager = create_db_manager('sqlite', db_path='replacements.db')
+m = Chem.MolFromSmiles('OCCOc1ccccc1')  # toluene
+db_manager = create_db_manager('sqlite', db_path='test.db')
 # For PostgreSQL, use:
 # db_manager = create_db_manager('postgres', ini_file='replacements.ini')
-mols = list(mutate_mol(m, db_manager, max_size=1))
+mols = list(mutate_mol(m, db_manager, max_inc=1))
 ```
 
 #### Grow Molecule
 
 ```python
 from rdkit import Chem
-from ta_gen.crem.crem import grow_mol
+from ta_gen.ocrem.ocrem import grow_mol
 from ta_gen.db import create_db_manager
 
-m = Chem.MolFromSmiles('c1cc(OC)ccc1C')  # toluene
-db_manager = create_db_manager('sqlite', db_path='replacements.db')
+m = Chem.MolFromSmiles('OCCOc1ccccc1')  # toluene
+db_manager = create_db_manager('sqlite', db_path='test.db')
 # For PostgreSQL, use:
 # db_manager = create_db_manager('postgres', ini_file='replacements.ini')
 mols = list(grow_mol(m, db_manager))
@@ -158,15 +171,15 @@ mols = list(grow_mol(m, db_manager))
 
 ```python
 from rdkit import Chem
-from ta_gen.crem.crem import link_mols
+from ta_gen.ocrem.ocrem import link_mols
 from ta_gen.db import create_db_manager
 
-m1 = Chem.MolFromSmiles('c1cc(OC)ccc1C')  # toluene
-m2 = Chem.MolFromSmiles('NCC(=O)O')  # glycine
-db_manager = create_db_manager('sqlite', db_path='replacements.db')
+m1 = Chem.MolFromSmiles('OC=O')  # toluene
+m2 = Chem.MolFromSmiles('CC=O')  # glycine
+db_manager = create_db_manager('sqlite', db_path='test.db')
 # For PostgreSQL, use:
 # db_manager = create_db_manager('postgres', ini_file='replacements.ini')
-mols = list(link_mols(m1, m2, db_manager))
+mols = list(link_mols(m1, m2, db_manager, radius=1))
 ```
 
 ### 3. Using the oCReM Databases
