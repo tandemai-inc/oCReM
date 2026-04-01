@@ -48,7 +48,6 @@ class SqliteManager(DBManager):
                     CREATE TABLE IF NOT EXISTS env_fragment (
                         env_id INTEGER,
                         fragment_id INTEGER,
-                        core_sma TEXT,
                         dist2 INTEGER,
                         frequency INTEGER,
                         PRIMARY KEY (env_id, fragment_id),
@@ -150,15 +149,14 @@ class SqliteManager(DBManager):
             (
                 env_ids[env],
                 fragment_ids[core_smi],
-                attr["core_sma"],
                 attr["dist2"],
                 attr["freq"],
             )
             for (env, core_smi), attr in env_fragment_combo.items()
         ]
         upsert_sql = """
-            INSERT INTO env_fragment (env_id, fragment_id, core_sma, dist2, frequency)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO env_fragment (env_id, fragment_id, dist2, frequency)
+            VALUES (?, ?, ?, ?)
             ON CONFLICT(env_id, fragment_id) DO UPDATE SET
             frequency = frequency + excluded.frequency
         """

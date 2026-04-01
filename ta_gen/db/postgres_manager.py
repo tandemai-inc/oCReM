@@ -119,7 +119,6 @@ class PostGresManager(DBManager):
                 CREATE TABLE IF NOT EXISTS env_fragment (
                     env_id BIGINT REFERENCES env(id),
                     fragment_id BIGINT REFERENCES fragment(id),
-                    core_sma TEXT,
                     dist2 SMALLINT,
                     frequency BIGINT,
                     PRIMARY KEY (env_id, fragment_id)
@@ -225,22 +224,22 @@ class PostGresManager(DBManager):
         buf = io.StringIO()
         for (env, core_smi), attr in env_fragment_combo.items():
             buf.write(
-                f"{env_ids[env]}\t{fragment_ids[core_smi]}\t{attr['core_sma']}\t{attr['dist2']}\t{attr['freq']}\n"
+                f"{env_ids[env]}\t{fragment_ids[core_smi]}\t{attr['dist2']}\t{attr['freq']}\n"
             )
         buf.seek(0)
         self.cursor.execute(
-            "CREATE TEMP TABLE tmp_ef (env_id BIGINT, fragment_id BIGINT, core_sma TEXT, dist2 SMALLINT, frequency BIGINT) ON COMMIT DROP"
+            "CREATE TEMP TABLE tmp_ef (env_id BIGINT, fragment_id BIGINT, dist2 SMALLINT, frequency BIGINT) ON COMMIT DROP"
         )
         self.cursor.copy_from(
             buf,
             "tmp_ef",
-            columns=("env_id", "fragment_id", "core_sma", "dist2", "frequency"),
+            columns=("env_id", "fragment_id", "dist2", "frequency"),
             sep="\t",
         )
         # upsert in batch
         self.cursor.execute("""
-            INSERT INTO env_fragment (env_id, fragment_id, core_sma, dist2, frequency)
-            SELECT env_id, fragment_id, core_sma, dist2, frequency FROM tmp_ef
+            INSERT INTO env_fragment (env_id, fragment_id, dist2, frequency)
+            SELECT env_id, fragment_id, dist2, frequency FROM tmp_ef
             ON CONFLICT (env_id, fragment_id) DO UPDATE SET
             frequency = env_fragment.frequency + EXCLUDED.frequency
         """)

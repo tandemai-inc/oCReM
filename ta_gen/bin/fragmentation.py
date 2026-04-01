@@ -15,8 +15,7 @@ from rdkit import Chem
 from rdkit.Chem import rdMMPA
 from tqdm import tqdm
 
-from ta_gen.crem_utils.mol_context import (combine_core_env_to_rxn_smarts,
-                                           get_std_context_core_permutations)
+from ta_gen.crem_utils.mol_context import get_std_context_core_permutations
 from ta_gen.db import create_db_manager
 
 
@@ -201,8 +200,7 @@ def read_chunks(input_file, chunk_size, sep):
     return chunks
 
 
-def calc_mp(env, core):
-    sma = combine_core_env_to_rxn_smarts(core, env, False)
+def calc_dist2(core):
     if core.count("*") == 2:
         mol = Chem.MolFromSmiles(core, sanitize=False)
         mat = Chem.GetDistanceMatrix(mol)
@@ -213,7 +211,7 @@ def calc_mp(env, core):
         dist2 = mat[ids[0], ids[1]]
     else:
         dist2 = 0
-    return sma, int(dist2)
+    return int(dist2)
 
 
 def frag_to_env(smi, core, contexts, max_heavy_atoms, radius, keep_stereo):
@@ -235,8 +233,8 @@ def frag_to_env(smi, core, contexts, max_heavy_atoms, radius, keep_stereo):
                         context, core, radius, keep_stereo
                     )
                     if env and cores:
-                        sma, dist2 = calc_mp(env, cores[0])
-                        results.append((env, cores[0], num_heavy_atoms, sma, dist2))
+                        dist2 = calc_dist2(cores[0])
+                        results.append((env, cores[0], num_heavy_atoms, dist2))
         else:
             sys.stderr.write(
                 f"more than two fragments in context ({contexts}) where core is empty for smiles: {smi}\n"
@@ -251,8 +249,8 @@ def frag_to_env(smi, core, contexts, max_heavy_atoms, radius, keep_stereo):
             )
             if env and cores:
                 for c in cores:
-                    sma, dist2 = calc_mp(env, c)
-                    results.append((env, c, num_heavy_atoms, sma, dist2))
+                    dist2 = calc_dist2(c)
+                    results.append((env, c, num_heavy_atoms, dist2))
 
     return results
 
@@ -285,9 +283,9 @@ def __fragment_mol_heavy_atoms(df, max_heavy_atoms, radius, keep_stereo):
             env_results = frag_to_env(
                 smi, core, chains, max_heavy_atoms, radius, keep_stereo
             )
-            for env, cores, num_heavy_atoms, sma, dist2 in env_results:
+            for env, cores, num_heavy_atoms, dist2 in env_results:
                 results.append(
-                    (smi, smi_id, core, chains, env, cores, num_heavy_atoms, sma, dist2)
+                    (smi, smi_id, core, chains, env, cores, num_heavy_atoms, dist2)
                 )
     return results
 
@@ -315,7 +313,7 @@ def __fragment_mol_hydrogen(df, max_heavy_atoms, radius, keep_stereo):
                 env_results = frag_to_env(
                     smi, core, chains, max_heavy_atoms, radius, keep_stereo
                 )
-                for env, cores, num_heavy_atoms, sma, dist2 in env_results:
+                for env, cores, num_heavy_atoms, dist2 in env_results:
                     results.append(
                         (
                             smi,
@@ -325,7 +323,6 @@ def __fragment_mol_hydrogen(df, max_heavy_atoms, radius, keep_stereo):
                             env,
                             cores,
                             num_heavy_atoms,
-                            sma,
                             dist2,
                         )
                     )
@@ -337,14 +334,13 @@ def batch_insert_db(data, db_manager, radius):
     fragments = {}
     env_fragment_combo = {}
     for row in data:
-        smi, smi_id, core, chains, env, core_smi, num_heavy_atoms, core_sma, dist2 = row
+        smi, smi_id, core, chains, env, core_smi, num_heavy_atoms, dist2 = row
         envs.add(env)
         fragments.update({core_smi: num_heavy_atoms})
         if (env, core_smi) in env_fragment_combo:
             env_fragment_combo[(env, core_smi)]["freq"] += 1
         else:
             env_fragment_combo[(env, core_smi)] = {
-                "core_sma": core_sma,
                 "dist2": dist2,
                 "freq": 1,
             }
@@ -392,7 +388,6 @@ class IntermediateFileManager(object):
                     "env",
                     "cores",
                     "num_heavy_atoms",
-                    "sma",
                     "dist2",
                 ]
             )

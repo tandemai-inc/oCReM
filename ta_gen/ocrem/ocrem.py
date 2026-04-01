@@ -383,6 +383,26 @@ def grow_mol(
     )
 
 
+def combine_link_mols(side_chain_1, side_chain_2, env_smarts):
+    mol = Chem.CombineMols(side_chain_1, side_chain_2)
+    mol = deepcopy(mol)
+    env=Chem.MolFromSmarts(env_smarts)
+    common_atoms = mol.GetSubstructMatch(env)
+
+    for atom in env.GetAtoms():
+        if atom.GetAtomMapNum()==1:
+            atom_in_mol = mol.GetAtomWithIdx(common_atoms[atom.GetIdx()])
+            if atom_in_mol.GetAtomicNum()==0:
+                atom_in_mol.SetAtomMapNum(1)
+
+        if atom.GetAtomMapNum()==2:
+            atom_in_mol = mol.GetAtomWithIdx(common_atoms[atom.GetIdx()])
+            if atom_in_mol.GetAtomicNum()==0:
+                atom_in_mol.SetAtomMapNum(2)
+
+    return mol
+
+
 def link_mols(
     mol1,
     mol2,
@@ -395,9 +415,7 @@ def link_mols(
     max_replacements=None,
     replace_ids_1=None,
     replace_ids_2=None,
-    symmetry_fixes=False,
     num_cpus=1,
-    attach_id=None,
 ):
     mol1 = Chem.AddHs(mol1)
     mol2 = Chem.AddHs(mol2)
@@ -463,11 +481,11 @@ def link_mols(
             if atom.GetAtomicNum() == 0:
                 atom.SetAtomMapNum(2)
 
-        mol = Chem.CombineMols(side_chain_1, side_chain_2)
-        mol_copy = deepcopy(mol)
+        mol = combine_link_mols(side_chain_1, side_chain_2, env_smarts)
+
         yield from gen_new_replacements(
             [(env_smarts, core_smi, atom_ids_1, atom_ids_2)],
-            mol_copy,
+            mol,
             db_manager,
             min_inc,
             max_inc,
