@@ -56,7 +56,7 @@ def __get_replacements(
 ):
     condition = [
         f"e.name = '{env}'",
-        f"e.radius = {radius}",
+        # f"e.radius = {radius}",
         f"ef.frequency >= {min_freq}",
         f"f.core_num_atoms BETWEEN {min_atoms} AND {max_atoms}",
     ]
@@ -369,7 +369,7 @@ def grow_mol(
         )  # ids of Hs to protect
         protected_ids.update(ids)  # Hs should be protected
 
-    return mutate_mol(
+    return mutate_mol_for_grow(
         mol,
         db_manager,
         radius,
@@ -385,6 +385,7 @@ def grow_mol(
 
 def combine_link_mols(side_chain_1, side_chain_2, env_smarts):
     mol = Chem.CombineMols(side_chain_1, side_chain_2)
+    mol = Chem.MolFromSmiles(Chem.MolToSmiles(mol))
     mol = deepcopy(mol)
     env=Chem.MolFromSmarts(env_smarts)
     common_atoms = mol.GetSubstructMatch(env)
