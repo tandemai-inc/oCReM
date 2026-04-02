@@ -146,7 +146,7 @@ from rdkit import Chem
 from ta_gen.ocrem.ocrem import mutate_mol
 from ta_gen.db import create_db_manager
 
-m = Chem.MolFromSmiles('OCCOc1ccccc1')  # toluene
+m = Chem.MolFromSmiles('OCCOc1ccccc1')
 db_manager = create_db_manager('sqlite', db_path='test.db')
 # For PostgreSQL, use:
 # db_manager = create_db_manager('postgres', ini_file='replacements.ini')
@@ -160,7 +160,7 @@ from rdkit import Chem
 from ta_gen.ocrem.ocrem import grow_mol
 from ta_gen.db import create_db_manager
 
-m = Chem.MolFromSmiles('OCCOc1ccccc1')  # toluene
+m = Chem.MolFromSmiles('OCCOc1ccccc1')
 db_manager = create_db_manager('sqlite', db_path='test.db')
 # For PostgreSQL, use:
 # db_manager = create_db_manager('postgres', ini_file='replacements.ini')
@@ -174,8 +174,8 @@ from rdkit import Chem
 from ta_gen.ocrem.ocrem import link_mols
 from ta_gen.db import create_db_manager
 
-m1 = Chem.MolFromSmiles('OC=O')  # toluene
-m2 = Chem.MolFromSmiles('CC=O')  # glycine
+m1 = Chem.MolFromSmiles('OC=O')
+m2 = Chem.MolFromSmiles('CC=O')
 db_manager = create_db_manager('sqlite', db_path='test.db')
 # For PostgreSQL, use:
 # db_manager = create_db_manager('postgres', ini_file='replacements.ini')
