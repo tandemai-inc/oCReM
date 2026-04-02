@@ -52,18 +52,14 @@ def zip_new_replacement(new_replacement, input_structure):
 
 
 def __get_replacements(
-    db_manager, env, dist, min_atoms, max_atoms, radius=None, min_freq=0, **kwargs
+    db_manager, env, dist, min_atoms, max_atoms, radius, min_freq=0, **kwargs
 ):
     condition = [
         f"e.name = '{env}'",
+        # f"e.radius = {radius}",
+        f"ef.frequency >= {min_freq}",
         f"f.core_num_atoms BETWEEN {min_atoms} AND {max_atoms}",
     ]
-    if radius is not None:
-        condition.append(f"e.radius = {radius}")
-
-    if min_freq:
-        condition.append(f"ef.frequency >= {min_freq}")
-
     if isinstance(dist, int):
         condition.append(f"ef.dist2 = {dist}")
     elif isinstance(dist, tuple) and len(dist) == 2:
@@ -87,7 +83,7 @@ def get_core_smi_replacements(
     min_inc,
     max_inc,
     max_replacements,
-    radius=None,
+    radius,
     min_freq=0,
     **kwargs,
 ):
@@ -118,7 +114,7 @@ def gen_new_replacements(  # noqa: C901
     max_inc,
     max_replacements,
     num_cpus,
-    radius=None,
+    radius,
     dist=None,
     min_freq=0,
     products=None,
@@ -144,7 +140,7 @@ def gen_new_replacements(  # noqa: C901
                 min_inc,
                 max_inc,
                 max_replacements,
-                radius=radius,
+                radius,
                 min_freq=min_freq,
             )
             for smi, new_core_smi in p.starmap(
@@ -160,7 +156,7 @@ def gen_new_replacements(  # noqa: C901
 def mutate_mol_for_grow(
     mol,
     db_manager,
-    radius=None,
+    radius=3,
     min_inc=-2,
     max_inc=2,
     dist=None,
@@ -246,7 +242,7 @@ def remove_atoms_and_keep_attachments(mol, atoms_to_remove):
 def mutate_mol(
     mol,
     db_manager,
-    radius=None,
+    radius=3,
     min_inc=-2,
     max_inc=2,
     dist=None,
@@ -345,7 +341,7 @@ def mutate_mol(
 def grow_mol(
     mol,
     db_manager,
-    radius=None,
+    radius=3,
     min_inc=1,
     max_inc=2,
     max_replacements=None,
@@ -376,7 +372,7 @@ def grow_mol(
     return mutate_mol_for_grow(
         mol,
         db_manager,
-        radius=radius,
+        radius,
         min_inc=min_inc,
         max_inc=max_inc,
         max_replacements=max_replacements,
@@ -412,7 +408,7 @@ def link_mols(
     mol1,
     mol2,
     db_manager,
-    radius=None,
+    radius=3,
     min_inc=1,
     max_inc=2,
     dist=None,
