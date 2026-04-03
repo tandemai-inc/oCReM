@@ -138,7 +138,10 @@ def gen_new_replacements(  # noqa: C901
             min_atoms = num_heavy_atoms + min_inc
             max_atoms = num_heavy_atoms + max_inc
 
-            if not (min_size <= num_heavy_atoms <= max_size and min_rel_size <= hac_ratio <= max_rel_size):
+            if not (
+                min_size <= num_heavy_atoms <= max_size
+                and min_rel_size <= hac_ratio <= max_rel_size
+            ):
                 continue
 
             new_replacement_generator = get_core_smi_replacements(
@@ -166,7 +169,7 @@ def mutate_mol_for_grow(
     mol,
     db_manager,
     radius=3,
-    min_atoms=1, 
+    min_atoms=1,
     max_atoms=2,
     dist=None,
     min_freq=0,
@@ -210,7 +213,7 @@ def mutate_mol_for_grow(
                 radius=radius,
                 dist=dist,
                 min_freq=min_freq,
-                min_size=0, 
+                min_size=0,
                 max_size=0,
                 products=products,
             )
@@ -352,9 +355,9 @@ def mutate_mol(
             radius=radius,
             dist=dist,
             min_freq=min_freq,
-            min_size=min_size, 
+            min_size=min_size,
             max_size=max_size,
-            min_rel_size=min_rel_size, 
+            min_rel_size=min_rel_size,
             max_rel_size=max_rel_size,
             products=products,
         )
@@ -364,7 +367,7 @@ def grow_mol(
     mol,
     db_manager,
     radius=3,
-    min_atoms=1, 
+    min_atoms=1,
     max_atoms=2,
     max_replacements=None,
     replace_ids=None,
@@ -409,18 +412,18 @@ def combine_link_mols(side_chain_1, side_chain_2, env_smarts):
     mol = Chem.CombineMols(side_chain_1, side_chain_2)
     mol = Chem.MolFromSmiles(Chem.MolToSmiles(mol))
     mol = deepcopy(mol)
-    env=Chem.MolFromSmarts(env_smarts)
+    env = Chem.MolFromSmarts(env_smarts)
     common_atoms = mol.GetSubstructMatch(env)
 
     for atom in env.GetAtoms():
-        if atom.GetAtomMapNum()==1:
+        if atom.GetAtomMapNum() == 1:
             atom_in_mol = mol.GetAtomWithIdx(common_atoms[atom.GetIdx()])
-            if atom_in_mol.GetAtomicNum()==0:
+            if atom_in_mol.GetAtomicNum() == 0:
                 atom_in_mol.SetAtomMapNum(1)
 
-        if atom.GetAtomMapNum()==2:
+        if atom.GetAtomMapNum() == 2:
             atom_in_mol = mol.GetAtomWithIdx(common_atoms[atom.GetIdx()])
-            if atom_in_mol.GetAtomicNum()==0:
+            if atom_in_mol.GetAtomicNum() == 0:
                 atom_in_mol.SetAtomMapNum(2)
 
     return mol
