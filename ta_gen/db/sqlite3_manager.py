@@ -57,8 +57,6 @@ class SqliteManager(DBManager):
                 """)
 
             conn.commit()
-            print("all tables created successfully (or already exist)")
-
         except sqlite3.Error as e:
             print(f"database error: {e}")
             conn.rollback()

@@ -105,6 +105,7 @@ def get_core_smi_replacements(
 def gen_new_replacements(  # noqa: C901
     fragments,
     mol,
+    mol_hac,
     db_manager,
     min_inc,
     max_inc,
@@ -129,8 +130,6 @@ def gen_new_replacements(  # noqa: C901
         return_format = lambda _smi, _new_core_smi: _smi
 
     _zip_new_replacement = partial(zip_new_replacement, input_structure=mol)
-
-    mol_hac = mol.GetNumHeavyAtoms()
 
     with Pool(min(num_cpus, cpu_count())) as p:
         for env_smarts, core_smi, *_ in fragments:
@@ -191,6 +190,7 @@ def mutate_mol_for_grow(
         if num_heavy_atoms == 0:
             valid_f.append(t)
 
+    mol_hac = mol.GetNumHeavyAtoms()
     for env_smarts, core_smi, atom_ids in valid_f:
         for atom_id in atom_ids:
             side_chain = deepcopy(mol)
@@ -201,6 +201,7 @@ def mutate_mol_for_grow(
             yield from gen_new_replacements(
                 [(env_smarts, core_smi, atom_ids)],
                 side_chain,
+                mol_hac,
                 db_manager,
                 min_atoms,
                 max_atoms,
@@ -256,9 +257,9 @@ def mutate_mol(
     radius=3,
     min_inc=-2,
     max_inc=2,
-    min_size=0, 
-    max_size=10, 
-    min_rel_size=0, 
+    min_size=0,
+    max_size=10,
+    min_rel_size=0,
     max_rel_size=1,
     dist=None,
     min_freq=0,
@@ -276,6 +277,7 @@ def mutate_mol(
         mol, radius, protected_ids=protected_ids, symmetry_fixes=symmetry_fixes
     )  # [(env smiles, core smiles, list of atom ids)]
 
+    mol_hac = mol.GetNumHeavyAtoms()
     for env_smarts, core_smi, atom_ids in f:
         if core_smi.count("*") == 1:
             side_chain_smi = remove_atoms_and_keep_attachments(mol, atom_ids)
@@ -341,6 +343,7 @@ def mutate_mol(
         yield from gen_new_replacements(
             [(env_smarts, core_smi, atom_ids)],
             side_chain,
+            mol_hac,
             db_manager,
             min_inc,
             max_inc,
@@ -502,10 +505,12 @@ def link_mols(
                 atom.SetAtomMapNum(2)
 
         mol = combine_link_mols(side_chain_1, side_chain_2, env_smarts)
+        mol_hac = mol.GetNumHeavyAtoms()
 
         yield from gen_new_replacements(
             [(env_smarts, core_smi, atom_ids_1, atom_ids_2)],
             mol,
+            mol_hac,
             db_manager,
             min_atoms,
             max_atoms,
