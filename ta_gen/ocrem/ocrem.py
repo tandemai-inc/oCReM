@@ -80,17 +80,13 @@ def get_core_smi_replacements(
     env,
     core_smi,
     dist,
-    min_inc,
-    max_inc,
+    min_atoms,
+    max_atoms,
     max_replacements,
     radius,
     min_freq=0,
     **kwargs,
 ):
-    num_heavy_atoms = Chem.MolFromSmiles(core_smi).GetNumHeavyAtoms()
-    min_atoms = num_heavy_atoms + min_inc
-    max_atoms = num_heavy_atoms + max_inc
-
     results = __get_replacements(
         db_manager, env, dist, min_atoms, max_atoms, radius, min_freq, **kwargs
     )
@@ -115,6 +111,10 @@ def gen_new_replacements(  # noqa: C901
     max_replacements,
     num_cpus,
     radius,
+    min_size=0,
+    max_size=8,
+    min_rel_size=0,
+    max_rel_size=1,
     dist=None,
     min_freq=0,
     products=None,
@@ -130,15 +130,25 @@ def gen_new_replacements(  # noqa: C901
 
     _zip_new_replacement = partial(zip_new_replacement, input_structure=mol)
 
+    mol_hac = mol.GetNumHeavyAtoms()
+
     with Pool(min(num_cpus, cpu_count())) as p:
         for env_smarts, core_smi, *_ in fragments:
+            num_heavy_atoms = Chem.MolFromSmiles(core_smi).GetNumHeavyAtoms()
+            hac_ratio = num_heavy_atoms / mol_hac
+            min_atoms = num_heavy_atoms + min_inc
+            max_atoms = num_heavy_atoms + max_inc
+
+            if not (min_size <= num_heavy_atoms <= max_size and min_rel_size <= hac_ratio <= max_rel_size):
+                continue
+
             new_replacement_generator = get_core_smi_replacements(
                 db_manager,
                 env_smarts,
                 core_smi,
                 dist,
-                min_inc,
-                max_inc,
+                min_atoms,
+                max_atoms,
                 max_replacements,
                 radius,
                 min_freq=min_freq,
@@ -157,8 +167,8 @@ def mutate_mol_for_grow(
     mol,
     db_manager,
     radius=3,
-    min_inc=-2,
-    max_inc=2,
+    min_atoms=1, 
+    max_atoms=2,
     dist=None,
     min_freq=0,
     replace_ids=None,
@@ -181,7 +191,6 @@ def mutate_mol_for_grow(
         if num_heavy_atoms == 0:
             valid_f.append(t)
 
-    print("valid f", valid_f)
     for env_smarts, core_smi, atom_ids in valid_f:
         for atom_id in atom_ids:
             side_chain = deepcopy(mol)
@@ -193,13 +202,15 @@ def mutate_mol_for_grow(
                 [(env_smarts, core_smi, atom_ids)],
                 side_chain,
                 db_manager,
-                min_inc,
-                max_inc,
+                min_atoms,
+                max_atoms,
                 max_replacements,
                 num_cpus,
                 radius=radius,
                 dist=dist,
                 min_freq=min_freq,
+                min_size=0, 
+                max_size=0,
                 products=products,
             )
 
@@ -245,6 +256,10 @@ def mutate_mol(
     radius=3,
     min_inc=-2,
     max_inc=2,
+    min_size=0, 
+    max_size=10, 
+    min_rel_size=0, 
+    max_rel_size=1,
     dist=None,
     min_freq=0,
     max_replacements=None,
@@ -334,6 +349,10 @@ def mutate_mol(
             radius=radius,
             dist=dist,
             min_freq=min_freq,
+            min_size=min_size, 
+            max_size=max_size,
+            min_rel_size=min_rel_size, 
+            max_rel_size=max_rel_size,
             products=products,
         )
 
@@ -342,8 +361,8 @@ def grow_mol(
     mol,
     db_manager,
     radius=3,
-    min_inc=1,
-    max_inc=2,
+    min_atoms=1, 
+    max_atoms=2,
     max_replacements=None,
     replace_ids=None,
     symmetry_fixes=False,
@@ -373,8 +392,8 @@ def grow_mol(
         mol,
         db_manager,
         radius,
-        min_inc=min_inc,
-        max_inc=max_inc,
+        min_atoms=min_atoms,
+        max_atoms=max_atoms,
         max_replacements=max_replacements,
         replace_ids=None,
         protected_ids=protected_ids,
@@ -409,8 +428,8 @@ def link_mols(
     mol2,
     db_manager,
     radius=3,
-    min_inc=1,
-    max_inc=2,
+    min_atoms=1,
+    max_atoms=2,
     dist=None,
     min_freq=0,
     max_replacements=None,
@@ -488,11 +507,13 @@ def link_mols(
             [(env_smarts, core_smi, atom_ids_1, atom_ids_2)],
             mol,
             db_manager,
-            min_inc,
-            max_inc,
+            min_atoms,
+            max_atoms,
             max_replacements,
             num_cpus,
             radius,
             dist=dist,
             min_freq=min_freq,
+            min_size=0,
+            max_size=0,
         )
