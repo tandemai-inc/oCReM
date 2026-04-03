@@ -56,7 +56,7 @@ def __get_replacements(
 ):
     condition = [
         f"e.name = '{env}'",
-        f"e.radius = {radius}",
+        # f"e.radius = {radius}",
         f"ef.frequency >= {min_freq}",
         f"f.core_num_atoms BETWEEN {min_atoms} AND {max_atoms}",
     ]
@@ -80,17 +80,13 @@ def get_core_smi_replacements(
     env,
     core_smi,
     dist,
-    min_inc,
-    max_inc,
+    min_atoms,
+    max_atoms,
     max_replacements,
     radius,
     min_freq=0,
     **kwargs,
 ):
-    num_heavy_atoms = Chem.MolFromSmiles(core_smi).GetNumHeavyAtoms()
-    min_atoms = num_heavy_atoms + min_inc
-    max_atoms = num_heavy_atoms + max_inc
-
     results = __get_replacements(
         db_manager, env, dist, min_atoms, max_atoms, radius, min_freq, **kwargs
     )
@@ -109,12 +105,17 @@ def get_core_smi_replacements(
 def gen_new_replacements(  # noqa: C901
     fragments,
     mol,
+    mol_hac,
     db_manager,
     min_inc,
     max_inc,
     max_replacements,
     num_cpus,
     radius,
+    min_size=0,
+    max_size=8,
+    min_rel_size=0,
+    max_rel_size=1,
     dist=None,
     min_freq=0,
     products=None,
@@ -132,13 +133,24 @@ def gen_new_replacements(  # noqa: C901
 
     with Pool(min(num_cpus, cpu_count())) as p:
         for env_smarts, core_smi, *_ in fragments:
+            num_heavy_atoms = Chem.MolFromSmiles(core_smi).GetNumHeavyAtoms()
+            hac_ratio = num_heavy_atoms / mol_hac
+            min_atoms = num_heavy_atoms + min_inc
+            max_atoms = num_heavy_atoms + max_inc
+
+            if not (
+                min_size <= num_heavy_atoms <= max_size
+                and min_rel_size <= hac_ratio <= max_rel_size
+            ):
+                continue
+
             new_replacement_generator = get_core_smi_replacements(
                 db_manager,
                 env_smarts,
                 core_smi,
                 dist,
-                min_inc,
-                max_inc,
+                min_atoms,
+                max_atoms,
                 max_replacements,
                 radius,
                 min_freq=min_freq,
@@ -157,8 +169,8 @@ def mutate_mol_for_grow(
     mol,
     db_manager,
     radius=3,
-    min_inc=-2,
-    max_inc=2,
+    min_atoms=1,
+    max_atoms=2,
     dist=None,
     min_freq=0,
     replace_ids=None,
@@ -181,7 +193,7 @@ def mutate_mol_for_grow(
         if num_heavy_atoms == 0:
             valid_f.append(t)
 
-    print("valid f", valid_f)
+    mol_hac = mol.GetNumHeavyAtoms()
     for env_smarts, core_smi, atom_ids in valid_f:
         for atom_id in atom_ids:
             side_chain = deepcopy(mol)
@@ -192,14 +204,17 @@ def mutate_mol_for_grow(
             yield from gen_new_replacements(
                 [(env_smarts, core_smi, atom_ids)],
                 side_chain,
+                mol_hac,
                 db_manager,
-                min_inc,
-                max_inc,
+                min_atoms,
+                max_atoms,
                 max_replacements,
                 num_cpus,
                 radius=radius,
                 dist=dist,
                 min_freq=min_freq,
+                min_size=0,
+                max_size=0,
                 products=products,
             )
 
@@ -245,6 +260,10 @@ def mutate_mol(
     radius=3,
     min_inc=-2,
     max_inc=2,
+    min_size=0,
+    max_size=10,
+    min_rel_size=0,
+    max_rel_size=1,
     dist=None,
     min_freq=0,
     max_replacements=None,
@@ -261,6 +280,7 @@ def mutate_mol(
         mol, radius, protected_ids=protected_ids, symmetry_fixes=symmetry_fixes
     )  # [(env smiles, core smiles, list of atom ids)]
 
+    mol_hac = mol.GetNumHeavyAtoms()
     for env_smarts, core_smi, atom_ids in f:
         if core_smi.count("*") == 1:
             side_chain_smi = remove_atoms_and_keep_attachments(mol, atom_ids)
@@ -326,6 +346,7 @@ def mutate_mol(
         yield from gen_new_replacements(
             [(env_smarts, core_smi, atom_ids)],
             side_chain,
+            mol_hac,
             db_manager,
             min_inc,
             max_inc,
@@ -334,6 +355,10 @@ def mutate_mol(
             radius=radius,
             dist=dist,
             min_freq=min_freq,
+            min_size=min_size,
+            max_size=max_size,
+            min_rel_size=min_rel_size,
+            max_rel_size=max_rel_size,
             products=products,
         )
 
@@ -342,8 +367,8 @@ def grow_mol(
     mol,
     db_manager,
     radius=3,
-    min_inc=1,
-    max_inc=2,
+    min_atoms=1,
+    max_atoms=2,
     max_replacements=None,
     replace_ids=None,
     symmetry_fixes=False,
@@ -369,12 +394,12 @@ def grow_mol(
         )  # ids of Hs to protect
         protected_ids.update(ids)  # Hs should be protected
 
-    return mutate_mol(
+    return mutate_mol_for_grow(
         mol,
         db_manager,
         radius,
-        min_inc=min_inc,
-        max_inc=max_inc,
+        min_atoms=min_atoms,
+        max_atoms=max_atoms,
         max_replacements=max_replacements,
         replace_ids=None,
         protected_ids=protected_ids,
@@ -383,24 +408,46 @@ def grow_mol(
     )
 
 
+def mark_wildcard_by_env(mol, env, map_num):
+    matches = mol.GetSubstructMatches(env)
+    if not matches:
+        return False
+
+    wildcard_indices_in_env = [
+        a.GetIdx()
+        for a in env.GetAtoms()
+        if (a.GetAtomicNum() == 0) & (a.GetAtomMapNum() == 1)
+    ]
+
+    for match in matches:
+        for env_idx in wildcard_indices_in_env:
+            mol_atom_idx = match[env_idx]
+            atom = mol.GetAtomWithIdx(mol_atom_idx)
+            if atom.GetAtomicNum() == 0:
+                atom.SetAtomMapNum(map_num)
+    return True
+
+
 def combine_link_mols(side_chain_1, side_chain_2, env_smarts):
-    mol = Chem.CombineMols(side_chain_1, side_chain_2)
-    mol = deepcopy(mol)
-    env=Chem.MolFromSmarts(env_smarts)
-    common_atoms = mol.GetSubstructMatch(env)
+    mol1 = Chem.MolFromSmiles(Chem.MolToSmiles(side_chain_1))
+    mol2 = Chem.MolFromSmiles(Chem.MolToSmiles(side_chain_2))
 
-    for atom in env.GetAtoms():
-        if atom.GetAtomMapNum()==1:
-            atom_in_mol = mol.GetAtomWithIdx(common_atoms[atom.GetIdx()])
-            if atom_in_mol.GetAtomicNum()==0:
-                atom_in_mol.SetAtomMapNum(1)
+    env1, env2 = env_smarts.split(".")
+    env1 = Chem.MolFromSmarts(env1)
+    env2 = Chem.MolFromSmarts(env2)
 
-        if atom.GetAtomMapNum()==2:
-            atom_in_mol = mol.GetAtomWithIdx(common_atoms[atom.GetIdx()])
-            if atom_in_mol.GetAtomicNum()==0:
-                atom_in_mol.SetAtomMapNum(2)
+    if mark_wildcard_by_env(mol1, env1, 1):
+        for atom in mol2.GetAtoms():
+            if atom.GetAtomicNum() == 0:
+                atom.SetAtomMapNum(2)
 
-    return mol
+        combined = Chem.CombineMols(mol1, mol2)
+    elif mark_wildcard_by_env(mol2, env1, 2):
+        for atom in mol2.GetAtoms():
+            if atom.GetAtomicNum() == 0:
+                atom.SetAtomMapNum(1)
+        combined = Chem.CombineMols(mol1, mol2)
+    return combined
 
 
 def link_mols(
@@ -408,8 +455,8 @@ def link_mols(
     mol2,
     db_manager,
     radius=3,
-    min_inc=1,
-    max_inc=2,
+    min_atoms=1,
+    max_atoms=2,
     dist=None,
     min_freq=0,
     max_replacements=None,
@@ -482,16 +529,55 @@ def link_mols(
                 atom.SetAtomMapNum(2)
 
         mol = combine_link_mols(side_chain_1, side_chain_2, env_smarts)
+        mol_hac = mol.GetNumHeavyAtoms()
 
         yield from gen_new_replacements(
             [(env_smarts, core_smi, atom_ids_1, atom_ids_2)],
             mol,
+            mol_hac,
             db_manager,
-            min_inc,
-            max_inc,
+            min_atoms,
+            max_atoms,
             max_replacements,
             num_cpus,
             radius,
             dist=dist,
             min_freq=min_freq,
+            min_size=0,
+            max_size=0,
         )
+
+
+if __name__ == "__main__":
+
+    mol1 = "CCOc1cc([*:1])ccc1C(=O)O"
+    mol2 = "c1cc([*:2])ccn1"
+
+    env1 = "c(:c(:*)[*:1])"
+    env2 = "c(:c(:*)[*:2])"
+
+    from itertools import product
+
+    _mol1 = None
+    _mol2 = None
+    for mol, env in product(
+        [Chem.MolFromSmiles(mol1), Chem.MolFromSmiles(mol2)],
+        [Chem.MolFromSmarts(env1), Chem.MolFromSmarts(env2)],
+    ):
+        print(f"mol: {Chem.MolToSmiles(mol)}, env: {env}")
+        common_atoms = mol.GetSubstructMatch(env)
+        for atom in env.GetAtoms():
+            if atom.GetAtomMapNum() == 1:
+                atom_in_mol = mol.GetAtomWithIdx(common_atoms[atom.GetIdx()])
+                if atom_in_mol.GetAtomicNum() == 0:
+                    atom_in_mol.SetAtomMapNum(1)
+                    _mol1 = deepcopy(mol)
+
+            if atom.GetAtomMapNum() == 2:
+                atom_in_mol = mol.GetAtomWithIdx(common_atoms[atom.GetIdx()])
+                if atom_in_mol.GetAtomicNum() == 0:
+                    atom_in_mol.SetAtomMapNum(2)
+                    _mol2 = deepcopy(mol)
+
+    mol = Chem.CombineMols(_mol1, _mol2)
+    print(f"mol: {Chem.MolToSmiles(mol)}")

@@ -8,11 +8,9 @@ from itertools import product
 from rdkit import Chem
 from rdkit.Chem import rdMMPA
 
-from ta_gen.crem_utils.mol_context import (
-    get_canon_context_core,
-    patt_remove_brackets,
-    patt_remove_map,
-)
+from ta_gen.crem_utils.mol_context import (get_canon_context_core,
+                                           patt_remove_brackets,
+                                           patt_remove_map)
 
 
 def get_atom_prop(molecule, prop="Index"):
