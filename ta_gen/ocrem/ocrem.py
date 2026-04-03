@@ -408,25 +408,46 @@ def grow_mol(
     )
 
 
+def mark_wildcard_by_env(mol, env, map_num):
+    matches = mol.GetSubstructMatches(env)
+    if not matches:
+        return False
+
+    wildcard_indices_in_env = [
+        a.GetIdx()
+        for a in env.GetAtoms()
+        if (a.GetAtomicNum() == 0) & (a.GetAtomMapNum() == 1)
+    ]
+
+    for match in matches:
+        for env_idx in wildcard_indices_in_env:
+            mol_atom_idx = match[env_idx]
+            atom = mol.GetAtomWithIdx(mol_atom_idx)
+            if atom.GetAtomicNum() == 0:
+                atom.SetAtomMapNum(map_num)
+    return True
+
+
 def combine_link_mols(side_chain_1, side_chain_2, env_smarts):
-    mol = Chem.CombineMols(side_chain_1, side_chain_2)
-    mol = Chem.MolFromSmiles(Chem.MolToSmiles(mol))
-    mol = deepcopy(mol)
-    env = Chem.MolFromSmarts(env_smarts)
-    common_atoms = mol.GetSubstructMatch(env)
+    mol1 = Chem.MolFromSmiles(Chem.MolToSmiles(side_chain_1))
+    mol2 = Chem.MolFromSmiles(Chem.MolToSmiles(side_chain_2))
 
-    for atom in env.GetAtoms():
-        if atom.GetAtomMapNum() == 1:
-            atom_in_mol = mol.GetAtomWithIdx(common_atoms[atom.GetIdx()])
-            if atom_in_mol.GetAtomicNum() == 0:
-                atom_in_mol.SetAtomMapNum(1)
+    env1, env2 = env_smarts.split(".")
+    env1 = Chem.MolFromSmarts(env1)
+    env2 = Chem.MolFromSmarts(env2)
 
-        if atom.GetAtomMapNum() == 2:
-            atom_in_mol = mol.GetAtomWithIdx(common_atoms[atom.GetIdx()])
-            if atom_in_mol.GetAtomicNum() == 0:
-                atom_in_mol.SetAtomMapNum(2)
+    if mark_wildcard_by_env(mol1, env1, 1):
+        for atom in mol2.GetAtoms():
+            if atom.GetAtomicNum() == 0:
+                atom.SetAtomMapNum(2)
 
-    return mol
+        combined = Chem.CombineMols(mol1, mol2)
+    elif mark_wildcard_by_env(mol2, env1, 2):
+        for atom in mol2.GetAtoms():
+            if atom.GetAtomicNum() == 0:
+                atom.SetAtomMapNum(1)
+        combined = Chem.CombineMols(mol1, mol2)
+    return combined
 
 
 def link_mols(
@@ -525,3 +546,38 @@ def link_mols(
             min_size=0,
             max_size=0,
         )
+
+
+if __name__ == "__main__":
+
+    mol1 = "CCOc1cc([*:1])ccc1C(=O)O"
+    mol2 = "c1cc([*:2])ccn1"
+
+    env1 = "c(:c(:*)[*:1])"
+    env2 = "c(:c(:*)[*:2])"
+
+    from itertools import product
+
+    _mol1 = None
+    _mol2 = None
+    for mol, env in product(
+        [Chem.MolFromSmiles(mol1), Chem.MolFromSmiles(mol2)],
+        [Chem.MolFromSmarts(env1), Chem.MolFromSmarts(env2)],
+    ):
+        print(f"mol: {Chem.MolToSmiles(mol)}, env: {env}")
+        common_atoms = mol.GetSubstructMatch(env)
+        for atom in env.GetAtoms():
+            if atom.GetAtomMapNum() == 1:
+                atom_in_mol = mol.GetAtomWithIdx(common_atoms[atom.GetIdx()])
+                if atom_in_mol.GetAtomicNum() == 0:
+                    atom_in_mol.SetAtomMapNum(1)
+                    _mol1 = deepcopy(mol)
+
+            if atom.GetAtomMapNum() == 2:
+                atom_in_mol = mol.GetAtomWithIdx(common_atoms[atom.GetIdx()])
+                if atom_in_mol.GetAtomicNum() == 0:
+                    atom_in_mol.SetAtomMapNum(2)
+                    _mol2 = deepcopy(mol)
+
+    mol = Chem.CombineMols(_mol1, _mol2)
+    print(f"mol: {Chem.MolToSmiles(mol)}")
