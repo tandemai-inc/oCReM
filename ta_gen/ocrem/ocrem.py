@@ -57,9 +57,11 @@ def __get_replacements(
     condition = [
         f"e.name = '{env}'",
         # f"e.radius = {radius}",
-        f"ef.frequency >= {min_freq}",
         f"f.core_num_atoms BETWEEN {min_atoms} AND {max_atoms}",
     ]
+    if min_freq:
+        condition.append(f"ef.frequency >= {min_freq}")
+
     if isinstance(dist, int):
         condition.append(f"ef.dist2 = {dist}")
     elif isinstance(dist, tuple) and len(dist) == 2:
@@ -103,6 +105,7 @@ def get_core_smi_replacements(
 
 
 def gen_new_replacements(  # noqa: C901
+    pool,
     fragments,
     mol,
     mol_hac,
@@ -131,38 +134,37 @@ def gen_new_replacements(  # noqa: C901
 
     _zip_new_replacement = partial(zip_new_replacement, input_structure=mol)
 
-    with Pool(min(num_cpus, cpu_count())) as p:
-        for env_smarts, core_smi, *_ in fragments:
-            num_heavy_atoms = Chem.MolFromSmiles(core_smi).GetNumHeavyAtoms()
-            hac_ratio = num_heavy_atoms / mol_hac
-            min_atoms = num_heavy_atoms + min_inc
-            max_atoms = num_heavy_atoms + max_inc
+    for env_smarts, core_smi, *_ in fragments:
+        num_heavy_atoms = Chem.MolFromSmiles(core_smi).GetNumHeavyAtoms()
+        hac_ratio = num_heavy_atoms / mol_hac
+        min_atoms = num_heavy_atoms + min_inc
+        max_atoms = num_heavy_atoms + max_inc
 
-            if not (
-                min_size <= num_heavy_atoms <= max_size
-                and min_rel_size <= hac_ratio <= max_rel_size
-            ):
-                continue
+        if not (
+            min_size <= num_heavy_atoms <= max_size
+            and min_rel_size <= hac_ratio <= max_rel_size
+        ):
+            continue
 
-            new_replacement_generator = get_core_smi_replacements(
-                db_manager,
-                env_smarts,
-                core_smi,
-                dist,
-                min_atoms,
-                max_atoms,
-                max_replacements,
-                radius,
-                min_freq=min_freq,
-            )
-            for smi, new_core_smi in p.starmap(
-                _zip_new_replacement,
-                new_replacement_generator,
-                chunksize=100,
-            ):
-                if smi and smi not in products:
-                    products.add(smi)
-                    yield return_format(smi, new_core_smi)
+        new_replacement_generator = get_core_smi_replacements(
+            db_manager,
+            env_smarts,
+            core_smi,
+            dist,
+            min_atoms,
+            max_atoms,
+            max_replacements,
+            radius,
+            min_freq=min_freq,
+        )
+        for smi, new_core_smi in pool.starmap(
+            _zip_new_replacement,
+            new_replacement_generator,
+            chunksize=100,
+        ):
+            if smi and smi not in products:
+                products.add(smi)
+                yield return_format(smi, new_core_smi)
 
 
 def mutate_mol_for_grow(
@@ -194,6 +196,7 @@ def mutate_mol_for_grow(
             valid_f.append(t)
 
     mol_hac = mol.GetNumHeavyAtoms()
+    pool = Pool(min(num_cpus, cpu_count()))
     for env_smarts, core_smi, atom_ids in valid_f:
         for atom_id in atom_ids:
             side_chain = deepcopy(mol)
@@ -202,6 +205,7 @@ def mutate_mol_for_grow(
             atom.SetAtomicNum(0)
             atom.SetAtomMapNum(1)
             yield from gen_new_replacements(
+                pool,
                 [(env_smarts, core_smi, atom_ids)],
                 side_chain,
                 mol_hac,
@@ -217,6 +221,7 @@ def mutate_mol_for_grow(
                 max_size=0,
                 products=products,
             )
+    pool.close()
 
 
 def remove_atoms_and_keep_attachments(mol, atoms_to_remove):
@@ -281,6 +286,7 @@ def mutate_mol(
     )  # [(env smiles, core smiles, list of atom ids)]
 
     mol_hac = mol.GetNumHeavyAtoms()
+    pool = Pool(min(num_cpus, cpu_count()))
     for env_smarts, core_smi, atom_ids in f:
         if core_smi.count("*") == 1:
             side_chain_smi = remove_atoms_and_keep_attachments(mol, atom_ids)
@@ -344,6 +350,7 @@ def mutate_mol(
             continue
 
         yield from gen_new_replacements(
+            pool,
             [(env_smarts, core_smi, atom_ids)],
             side_chain,
             mol_hac,
@@ -361,6 +368,7 @@ def mutate_mol(
             max_rel_size=max_rel_size,
             products=products,
         )
+    pool.close()
 
 
 def grow_mol(
@@ -513,6 +521,7 @@ def link_mols(
         protected_ids_2=protected_ids_2,
     )  # [(env smiles, core smiles, list of atom ids)]
 
+    pool = Pool(min(num_cpus, cpu_count()))
     for env_smarts, core_smi, atom_ids_1, atom_ids_2 in fragments:
         side_chain_smi_1 = remove_atoms_and_keep_attachments(mol1, atom_ids_1)
         # replaced_string = re.sub(r"\*", r"\[*:1\]", side_chain_smi_1)  # [1*] -> [*:1]
@@ -532,6 +541,7 @@ def link_mols(
         mol_hac = mol.GetNumHeavyAtoms()
 
         yield from gen_new_replacements(
+            pool,
             [(env_smarts, core_smi, atom_ids_1, atom_ids_2)],
             mol,
             mol_hac,
@@ -546,6 +556,7 @@ def link_mols(
             min_size=0,
             max_size=0,
         )
+    pool.close()
 
 
 if __name__ == "__main__":

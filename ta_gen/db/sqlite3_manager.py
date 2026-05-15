@@ -171,7 +171,6 @@ class SqliteManager(DBManager):
             self.conn.rollback()  # rollback
 
     def execute(self, sql):
-        self.connect_db()
         try:
             self.cursor.execute(sql)
             return self.cursor.fetchall() or []
