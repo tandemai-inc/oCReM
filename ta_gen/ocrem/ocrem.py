@@ -57,7 +57,7 @@ def __get_replacements(
     condition = [
         f"e.name = '{env}'",
         # f"e.radius = {radius}",
-        f"f.core_num_atoms BETWEEN {min_atoms} AND {max_atoms}",
+        f"ef.core_num_atoms BETWEEN {min_atoms} AND {max_atoms}",
     ]
     if min_freq:
         condition.append(f"ef.frequency >= {min_freq}")
