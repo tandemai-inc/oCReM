@@ -40,7 +40,8 @@ class SqliteManager(DBManager):
             cursor.execute("""
                     CREATE TABLE IF NOT EXISTS fragment (
                         id INTEGER PRIMARY KEY,
-                        core_smi VARCHAR(512) UNIQUE
+                        core_smi VARCHAR(512) UNIQUE,
+                        core_num_atoms INTEGER
                     )
                 """)
 
@@ -167,7 +168,7 @@ class SqliteManager(DBManager):
         ]
         upsert_sql = """
             INSERT INTO env_fragment (env_id, fragment_id, dist2, frequency, core_num_atoms)
-            VALUES (?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(env_id, fragment_id) DO UPDATE SET
             frequency = frequency + excluded.frequency
         """
