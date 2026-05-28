@@ -11,6 +11,8 @@ from rdkit import Chem
 
 from ta_gen.crem_utils.mol_context import combine_core_env_to_rxn_smarts
 from ta_gen.utils.fragment_utils import fragment_mol, fragment_mol_link
+import multiprocessing
+multiprocessing.set_start_method('fork')
 
 
 def update_protected_ids(mol, protected_ids, replace_ids):
@@ -45,7 +47,6 @@ def zip_new_replacement(new_replacement, input_structure):
             final_mol, catchErrors=True
         )  # Bonds can be restored to the aromatic bond type
         smi = Chem.MolToSmiles(final_mol, isomericSmiles=True)
-        smi = Chem.MolToSmiles(Chem.MolFromSmiles(smi))
         return smi, new_replacement
     except Exception:
         return None, None
