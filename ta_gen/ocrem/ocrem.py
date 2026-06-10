@@ -447,6 +447,9 @@ def combine_link_mols(side_chain_1, side_chain_2, env_smarts):
     elif mark_wildcard_by_env(mol2, env1, 2):
         for atom in mol1.GetAtoms():
             if atom.GetAtomicNum() == 0:
+                atom.SetAtomMapNum(2)
+        for atom in mol2.GetAtoms():
+            if atom.GetAtomicNum() == 0:
                 atom.SetAtomMapNum(1)
         combined = Chem.CombineMols(mol1, mol2)
     return combined
