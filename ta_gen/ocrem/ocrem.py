@@ -435,16 +435,24 @@ def combine_link_mols(side_chain_1, side_chain_2, env_smarts):
     mol2 = Chem.MolFromSmiles(Chem.MolToSmiles(side_chain_2))
 
     env1, env2 = env_smarts.split(".")
+    for env in env_smarts.split("."):
+        if "*:1" in env:
+            env1 = env
+        elif "*:2" in env:
+            env2 = env
+
     env1 = Chem.MolFromSmarts(env1)
     env2 = Chem.MolFromSmarts(env2)
 
-    if mark_wildcard_by_env(mol1, env1, 1):
+    mol1_in_env1 = mark_wildcard_by_env(mol1, env1, 1)
+    mol2_in_env_2 = mark_wildcard_by_env(mol2, env2, 2)
+    if mol1_in_env1 and mol2_in_env_2:
         for atom in mol2.GetAtoms():
             if atom.GetAtomicNum() == 0:
                 atom.SetAtomMapNum(2)
 
         combined = Chem.CombineMols(mol1, mol2)
-    elif mark_wildcard_by_env(mol2, env1, 2):
+    else:
         for atom in mol1.GetAtoms():
             if atom.GetAtomicNum() == 0:
                 atom.SetAtomMapNum(2)
