@@ -46,7 +46,8 @@ def zip_new_replacement(new_replacement, input_structure):
         Chem.SanitizeMol(
             final_mol, catchErrors=True
         )  # Bonds can be restored to the aromatic bond type
-        smi = Chem.MolToSmiles(final_mol, isomericSmiles=True)
+        # smi = Chem.MolToSmiles(final_mol, isomericSmiles=True)
+        smi = Chem.MolToSmiles(Chem.RemoveHs(final_mol), isomericSmiles=True, canonical=True)
         return smi, new_replacement
     except Exception:
         return None, None
@@ -222,38 +223,50 @@ def mutate_mol_for_grow(
 
 
 def remove_atoms_and_keep_attachments(mol, atoms_to_remove):
-    emol = Chem.EditableMol(mol)
+    remove_set = set(atoms_to_remove)
 
-    # Store bond information for attachment points
-    bonds_to_break = []
-    for atom_idx in atoms_to_remove:
-        atom = mol.GetAtomWithIdx(atom_idx)
-        for neighbor in atom.GetNeighbors():
-            neighbor_idx = neighbor.GetIdx()
-            if neighbor_idx not in atoms_to_remove:
-                # This is a bond connecting the "keep part" and "remove part"
-                bonds_to_break.append((neighbor_idx, atom_idx))
+    # 1. find bonds to cut
+    bonds_to_cut = []
+    for bond in mol.GetBonds():
+        idx1 = bond.GetBeginAtomIdx()
+        idx2 = bond.GetEndAtomIdx()
+        if (idx1 in remove_set) != (idx2 in remove_set):
+            bonds_to_cut.append(bond.GetIdx())
 
-    # 3. Use RDKit's special functions to break bonds and add Dummy Atoms (*)
-    # ReplaceCore logic is complex, here we manually break bonds for precision
-    # We iterate through the boundary bonds found earlier, break them and add *
+    # 2. cut bond and add *
+    if bonds_to_cut:
+        fragmented_mol = Chem.FragmentOnBonds(mol, bonds_to_cut,
+                                              dummyLabels=[(0, 0)] * len(bonds_to_cut))
+    else:
+        fragmented_mol = mol
 
-    fragmented_mol = Chem.RWMol(mol)
-    for neighbor_idx, to_remove_idx in bonds_to_break:
-        # Add a dummy atom (*)
-        dummy_idx = fragmented_mol.AddAtom(Chem.Atom(0))
-        # Create chemical bond between the retained atom and the dummy atom
-        bond = mol.GetBondBetweenAtoms(neighbor_idx, to_remove_idx)
-        fragmented_mol.AddBond(neighbor_idx, dummy_idx, bond.GetBondType())
+    # 3. remove atoms in reverse order
+    editable_mol = Chem.RWMol(fragmented_mol)
+    for idx in sorted(list(remove_set), reverse=True):
+        editable_mol.RemoveAtom(idx)
 
-    # 4. Finally remove all target atoms
-    # Must remove from largest index to smallest, otherwise indices will be messed up
-    for idx in sorted(atoms_to_remove, reverse=True):
-        fragmented_mol.RemoveAtom(idx)
+    result_mol = editable_mol.GetMol()
+    Chem.SanitizeMol(result_mol)
 
-    # 5. Convert to SMILES (result may contain multiple fragments)
-    result_smiles = Chem.MolToSmiles(fragmented_mol.GetMol())
-    return result_smiles
+    # 4. split molecule into frags
+    frags = Chem.GetMolFrags(result_mol, asMols=True)
+
+    # 5. filter frags with *
+    valid_frags = []
+    for frag in frags:
+        # check if fragment is dummy only, if not, it is a valid fragment
+        is_dummy_only = all(atom.GetAtomicNum() == 0 for atom in frag.GetAtoms())
+
+        if not is_dummy_only:
+            valid_frags.append(frag)
+
+    if not valid_frags:
+        return ""
+
+    # 6. combine valid frags into a single SMILES string
+    combined_smiles = ".".join([Chem.MolToSmiles(f) for f in valid_frags])
+
+    return combined_smiles
 
 
 def mutate_mol(
