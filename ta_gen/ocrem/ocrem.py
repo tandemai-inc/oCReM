@@ -93,6 +93,8 @@ def get_core_smi_replacements(
     results = __get_replacements(
         db_manager, env, dist, min_atoms, max_atoms, radius, min_freq, **kwargs
     )
+    # remove core_smi from results
+    results.discard((core_smi,))
 
     if max_replacements is not None:
         n = min(len(results), max_replacements)
@@ -101,8 +103,7 @@ def get_core_smi_replacements(
         selected_results = list(results)
 
     for new_core_smi in selected_results:
-        if new_core_smi != core_smi:
-            yield new_core_smi
+        yield new_core_smi
 
 
 def gen_new_replacements(  # noqa: C901
@@ -423,7 +424,7 @@ def grow_mol(
     )
 
 
-def mark_wildcard_by_env(mol, env, map_num):
+def mark_wildcard_by_env(mol, env):
     matches = mol.GetSubstructMatches(env)
     if not matches:
         return False
@@ -431,7 +432,7 @@ def mark_wildcard_by_env(mol, env, map_num):
     wildcard_indices_in_env = [
         a.GetIdx()
         for a in env.GetAtoms()
-        if (a.GetAtomicNum() == 0) & (a.GetAtomMapNum() == 1)
+        if (a.GetAtomicNum() == 0) & (a.GetAtomMapNum() != 0)
     ]
 
     for match in matches:
@@ -439,8 +440,8 @@ def mark_wildcard_by_env(mol, env, map_num):
             mol_atom_idx = match[env_idx]
             atom = mol.GetAtomWithIdx(mol_atom_idx)
             if atom.GetAtomicNum() == 0:
-                atom.SetAtomMapNum(map_num)
-    return True
+                return True
+    return False
 
 
 def combine_link_mols(side_chain_1, side_chain_2, env_smarts):
@@ -457,8 +458,8 @@ def combine_link_mols(side_chain_1, side_chain_2, env_smarts):
     env1 = Chem.MolFromSmarts(env1)
     env2 = Chem.MolFromSmarts(env2)
 
-    mol1_in_env1 = mark_wildcard_by_env(mol1, env1, 1)
-    mol2_in_env_2 = mark_wildcard_by_env(mol2, env2, 2)
+    mol1_in_env1 = mark_wildcard_by_env(mol1, env1)
+    mol2_in_env_2 = mark_wildcard_by_env(mol2, env2)
     if mol1_in_env1 and mol2_in_env_2:
         for atom in mol2.GetAtoms():
             if atom.GetAtomicNum() == 0:
