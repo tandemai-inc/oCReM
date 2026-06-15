@@ -319,7 +319,7 @@ def map_env_with_side_chain(env_smarts, side_chain_smi):
         matched_envs = __get_potential_macthes(side_chain, env_info)
         side_chain_matched_envs.append([side_chain_smi, matched_envs])
 
-    side_chain_matched_envs = sorted(side_chain_matched_envs, key=lambda x: len(x))
+    side_chain_matched_envs = sorted(side_chain_matched_envs, key=lambda x: len(x[1]))
     final_matches = []
     while side_chain_matched_envs:
         cur_side_chain_info = side_chain_matched_envs[0]
@@ -332,7 +332,7 @@ def map_env_with_side_chain(env_smarts, side_chain_smi):
             for ele in side_chain_matched_envs:
                 ele[1].discard(matched_env_id)
             side_chain_matched_envs = sorted(
-                side_chain_matched_envs, key=lambda x: len(x)
+                side_chain_matched_envs, key=lambda x: len(x[1])
             )
         else:
             final_matches.append(([side_chain_smi, None]))
@@ -614,3 +614,7 @@ def link_mols(
             min_size=0,
             max_size=0,
         )
+
+if __name__ == "__main__":
+    res = map_env_with_side_chain("*-C-O-C(=O)-[*:2].C-[*:1]", "*C(=O)OCC.*C")
+    print(f"res: {res}")
