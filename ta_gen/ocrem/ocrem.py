@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 
+import multiprocessing
 import random
 import re
 from copy import deepcopy
@@ -9,10 +10,9 @@ from multiprocessing import Pool, cpu_count
 
 from rdkit import Chem
 
-from ta_gen.crem_utils.mol_context import combine_core_env_to_rxn_smarts
 from ta_gen.utils.fragment_utils import fragment_mol, fragment_mol_link
-import multiprocessing
-multiprocessing.set_start_method('fork')
+
+multiprocessing.set_start_method("fork")
 
 
 def update_protected_ids(mol, protected_ids, replace_ids):
@@ -47,7 +47,9 @@ def zip_new_replacement(new_replacement, input_structure):
             final_mol, catchErrors=True
         )  # Bonds can be restored to the aromatic bond type
         # smi = Chem.MolToSmiles(final_mol, isomericSmiles=True)
-        smi = Chem.MolToSmiles(Chem.RemoveHs(final_mol), isomericSmiles=True, canonical=True)
+        smi = Chem.MolToSmiles(
+            Chem.RemoveHs(final_mol), isomericSmiles=True, canonical=True
+        )
         return smi, new_replacement
     except Exception:
         return None, None
@@ -236,8 +238,9 @@ def remove_atoms_and_keep_attachments(mol, atoms_to_remove):
 
     # 2. cut bond and add *
     if bonds_to_cut:
-        fragmented_mol = Chem.FragmentOnBonds(mol, bonds_to_cut,
-                                              dummyLabels=[(0, 0)] * len(bonds_to_cut))
+        fragmented_mol = Chem.FragmentOnBonds(
+            mol, bonds_to_cut, dummyLabels=[(0, 0)] * len(bonds_to_cut)
+        )
     else:
         fragmented_mol = mol
 
@@ -279,6 +282,7 @@ def __check_potential_match(env, side_chain, possible_match):
 
     return True
 
+
 def __get_potential_macthes(side_chain, env_info):
     matches = set()
     for env_id, _env_info in env_info.items():
@@ -291,18 +295,19 @@ def __get_potential_macthes(side_chain, env_info):
 
     return matches
 
+
 def map_env_with_side_chain(env_smarts, side_chain_smi):
     # parse envs
     env_smarts_list = env_smarts.split(".")
     env_info = {}
     for env_smart in env_smarts_list:
-        match = re.search(r'\[\*:(\d+)\]', env_smart)
+        match = re.search(r"\[\*:(\d+)\]", env_smart)
         if match:
             env_id = int(match.group(1))
             env_info[env_id] = {
-                "mol": Chem.MolFromSmarts(env_smart), "smart": env_smart
+                "mol": Chem.MolFromSmarts(env_smart),
+                "smart": env_smart,
             }
-
 
     # parse side chain
     side_chain_smi_list = side_chain_smi.split(".")
@@ -317,7 +322,7 @@ def map_env_with_side_chain(env_smarts, side_chain_smi):
     side_chain_matched_envs = sorted(side_chain_matched_envs, key=lambda x: len(x))
     final_matches = []
     while side_chain_matched_envs:
-        cur_side_chain_info =  side_chain_matched_envs[0]
+        cur_side_chain_info = side_chain_matched_envs[0]
         side_chain_smi, cur_matched_envs = cur_side_chain_info
         if cur_matched_envs:
             matched_env_id = cur_matched_envs.pop()
@@ -326,6 +331,9 @@ def map_env_with_side_chain(env_smarts, side_chain_smi):
             side_chain_matched_envs = side_chain_matched_envs[1:]
             for ele in side_chain_matched_envs:
                 ele[1].discard(matched_env_id)
+            side_chain_matched_envs = sorted(
+                side_chain_matched_envs, key=lambda x: len(x)
+            )
         else:
             final_matches.append(([side_chain_smi, None]))
             # update side_chain_matched_envs
@@ -333,7 +341,7 @@ def map_env_with_side_chain(env_smarts, side_chain_smi):
 
     # fill None
     used_env_ids = set([_[1] for _ in final_matches if _[1]])
-    unused_ids = set(range(1, len(env_smarts_list)+1)) - used_env_ids
+    unused_ids = set(range(1, len(env_smarts_list) + 1)) - used_env_ids
     for ele in final_matches:
         if ele[1] is None:
             ele[1] = unused_ids.pop()
@@ -348,6 +356,7 @@ def map_env_with_side_chain(env_smarts, side_chain_smi):
         side_chains.append(Chem.MolToSmiles(mol))
 
     return ".".join(side_chains)
+
 
 def mutate_mol(
     mol,
@@ -605,11 +614,3 @@ def link_mols(
             min_size=0,
             max_size=0,
         )
-
-
-if __name__ == "__main__":
-    x = map_env_with_side_chain(
-        "*-C-O-C(=O)-[*:1].*1:c:c:c(-[*:3]):c:c:1.O-[*:2]",
-        "*C(=O)OCC.*O.*c1ccccc1"
-    )
-    print(x)
