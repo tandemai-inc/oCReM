@@ -315,32 +315,32 @@ def map_env_with_side_chain(env_smarts, side_chain_smi):
         side_chain_matched_envs.append([side_chain_smi, matched_envs])
 
     side_chain_matched_envs = sorted(side_chain_matched_envs, key=lambda x: len(x))
-    final_matches = {}
+    final_matches = []
     while side_chain_matched_envs:
         cur_side_chain_info =  side_chain_matched_envs[0]
         side_chain_smi, cur_matched_envs = cur_side_chain_info
         if cur_matched_envs:
             matched_env_id = cur_matched_envs.pop()
-            final_matches[side_chain_smi] = matched_env_id
+            final_matches.append(([side_chain_smi, matched_env_id]))
             # update side_chain_matched_envs
             side_chain_matched_envs = side_chain_matched_envs[1:]
             for ele in side_chain_matched_envs:
                 ele[1].discard(matched_env_id)
         else:
-            final_matches[side_chain_smi] = None
+            final_matches.append(([side_chain_smi, None]))
             # update side_chain_matched_envs
             side_chain_matched_envs = side_chain_matched_envs[1:]
 
     # fill None
-    used_env_ids = set([_ for _ in final_matches.values() if _])
+    used_env_ids = set([_[1] for _ in final_matches if _[1]])
     unused_ids = set(range(1, len(env_smarts_list)+1)) - used_env_ids
-    for side_chain_smi in final_matches:
-        if final_matches[side_chain_smi] is None:
-            final_matches[side_chain_smi] = unused_ids.pop()
+    for ele in final_matches:
+        if ele[1] is None:
+            ele[1] = unused_ids.pop()
 
     # update side chain
     side_chains = []
-    for side_chain_smi, env_id in final_matches.items():
+    for side_chain_smi, env_id in final_matches:
         mol = Chem.MolFromSmiles(side_chain_smi)
         for atom in mol.GetAtoms():
             if atom.GetAtomicNum() == 0:
