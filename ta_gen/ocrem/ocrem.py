@@ -270,6 +270,85 @@ def remove_atoms_and_keep_attachments(mol, atoms_to_remove):
     return combined_smiles
 
 
+def __check_potential_match(env, side_chain, possible_match):
+    for env_id, side_chain_id in enumerate(possible_match):
+        env_atom = env.GetAtomWithIdx(env_id)
+        side_chain_atom = side_chain.GetAtomWithIdx(side_chain_id)
+        if env_atom.GetAtomMapNum() > 0 and side_chain_atom.GetAtomicNum() != 0:
+            return False
+
+    return True
+
+def __get_potential_macthes(side_chain, env_info):
+    matches = set()
+    for env_id, _env_info in env_info.items():
+        env = _env_info["mol"]
+        all_matches = side_chain.GetSubstructMatches(env, uniquify=False)
+        for possible_match in all_matches:
+            if __check_potential_match(env, side_chain, possible_match):
+                matches.add(env_id)
+                break
+
+    return matches
+
+def map_env_with_side_chain(env_smarts, side_chain_smi):
+    # parse envs
+    env_smarts_list = env_smarts.split(".")
+    env_info = {}
+    for env_smart in env_smarts_list:
+        match = re.search(r'\[\*:(\d+)\]', env_smart)
+        if match:
+            env_id = int(match.group(1))
+            env_info[env_id] = {
+                "mol": Chem.MolFromSmarts(env_smart), "smart": env_smart
+            }
+
+
+    # parse side chain
+    side_chain_smi_list = side_chain_smi.split(".")
+
+    # search potential matched envs for each chain
+    side_chain_matched_envs = []
+    for side_chain_smi in side_chain_smi_list:
+        side_chain = Chem.MolFromSmiles(side_chain_smi)
+        matched_envs = __get_potential_macthes(side_chain, env_info)
+        side_chain_matched_envs.append([side_chain_smi, matched_envs])
+
+    side_chain_matched_envs = sorted(side_chain_matched_envs, key=lambda x: len(x))
+    final_matches = {}
+    while side_chain_matched_envs:
+        cur_side_chain_info =  side_chain_matched_envs[0]
+        side_chain_smi, cur_matched_envs = cur_side_chain_info
+        if cur_matched_envs:
+            matched_env_id = cur_matched_envs.pop()
+            final_matches[side_chain_smi] = matched_env_id
+            # update side_chain_matched_envs
+            side_chain_matched_envs = side_chain_matched_envs[1:]
+            for ele in side_chain_matched_envs:
+                ele[1].discard(matched_env_id)
+        else:
+            final_matches[side_chain_smi] = None
+            # update side_chain_matched_envs
+            side_chain_matched_envs = side_chain_matched_envs[1:]
+
+    # fill None
+    used_env_ids = set([_ for _ in final_matches.values() if _])
+    unused_ids = set(range(1, len(env_smarts_list)+1)) - used_env_ids
+    for side_chain_smi in final_matches:
+        if final_matches[side_chain_smi] is None:
+            final_matches[side_chain_smi] = unused_ids.pop()
+
+    # update side chain
+    side_chains = []
+    for side_chain_smi, env_id in final_matches.items():
+        mol = Chem.MolFromSmiles(side_chain_smi)
+        for atom in mol.GetAtoms():
+            if atom.GetAtomicNum() == 0:
+                atom.SetAtomMapNum(env_id)
+        side_chains.append(Chem.MolToSmiles(mol))
+
+    return ".".join(side_chains)
+
 def mutate_mol(
     mol,
     db_manager,
@@ -300,60 +379,13 @@ def mutate_mol(
     for env_smarts, core_smi, atom_ids in f:
         if core_smi.count("*") == 1:
             side_chain_smi = remove_atoms_and_keep_attachments(mol, atom_ids)
-            # replaced_string = re.sub(r"\*", r"\[*:1\]", side_chain_smi)  # [1*] -> [*:1]
             side_chain = Chem.MolFromSmiles(side_chain_smi)
             for atom in side_chain.GetAtoms():
                 if atom.GetAtomicNum() == 0:
                     atom.SetAtomMapNum(1)
         else:
-            smarts = combine_core_env_to_rxn_smarts(core_smi, env_smarts, keep_h=False)
-            smarts_mol = Chem.MolFromSmarts(smarts)
-            total_match = mol.GetSubstructMatch(smarts_mol)
-            core_mol = Chem.MolFromSmarts(core_smi)
-            dummy_idx_bond_idx_map = {}
-            for atom in core_mol.GetAtoms():
-                if atom.GetAtomicNum() == 0:
-                    neighbor = atom.GetNeighbors()
-                    dummy_idx_bond_idx_map[atom.GetAtomMapNum()] = [
-                        atom.GetIdx(),
-                        neighbor[0].GetIdx(),
-                    ]
-
-            core_matches = mol.GetSubstructMatches(core_mol)
-
-            frag_mol = None
-
-            for core_match in core_matches:
-                if set(core_match).issubset(set(total_match)):
-                    cut_bonds = []
-                    labels = []
-                    for k, v in dummy_idx_bond_idx_map.items():
-                        cut_bonds.append(
-                            mol.GetBondBetweenAtoms(
-                                core_match[v[0]], core_match[v[1]]
-                            ).GetIdx()
-                        )
-                        labels.append((k, k))
-                    frag_mol = Chem.FragmentOnBonds(
-                        mol, cut_bonds, addDummies=True, dummyLabels=labels
-                    )
-                    break
-
-            if not frag_mol:
-                continue
-
-            frag_smi = Chem.MolToSmiles(frag_mol)
-
-            frag_smi_list = frag_smi.split(".")
-
-            side_chain_smi_list = []
-
-            for s in frag_smi_list:
-                if s.count("*") == 1:
-                    replaced_string = re.sub(r"(\d+)\*", r"*:\1", s)  # [1*] -> [*:1]
-                    side_chain_smi_list.append(replaced_string)
-
-            side_chain_smi = ".".join(side_chain_smi_list)
+            side_chain_smi = remove_atoms_and_keep_attachments(mol, atom_ids)
+            side_chain_smi = map_env_with_side_chain(env_smarts, side_chain_smi)
             side_chain = Chem.MolFromSmiles(side_chain_smi)
 
         if not side_chain_smi:
@@ -425,7 +457,7 @@ def grow_mol(
 
 
 def mark_wildcard_by_env(mol, env):
-    matches = mol.GetSubstructMatches(env)
+    matches = mol.GetSubstructMatches(env, uniquify=False)
     if not matches:
         return False
 
@@ -458,9 +490,9 @@ def combine_link_mols(side_chain_1, side_chain_2, env_smarts):
     env1 = Chem.MolFromSmarts(env1)
     env2 = Chem.MolFromSmarts(env2)
 
-    mol1_in_env1 = mark_wildcard_by_env(mol1, env1)
+    mol1_in_env_1 = mark_wildcard_by_env(mol1, env1)
     mol2_in_env_2 = mark_wildcard_by_env(mol2, env2)
-    if mol1_in_env1 and mol2_in_env_2:
+    if mol1_in_env_1 and mol2_in_env_2:
         for atom in mol2.GetAtoms():
             if atom.GetAtomicNum() == 0:
                 atom.SetAtomMapNum(2)
@@ -576,35 +608,8 @@ def link_mols(
 
 
 if __name__ == "__main__":
-
-    mol1 = "CCOc1cc([*:1])ccc1C(=O)O"
-    mol2 = "c1cc([*:2])ccn1"
-
-    env1 = "c(:c(:*)[*:1])"
-    env2 = "c(:c(:*)[*:2])"
-
-    from itertools import product
-
-    _mol1 = None
-    _mol2 = None
-    for mol, env in product(
-        [Chem.MolFromSmiles(mol1), Chem.MolFromSmiles(mol2)],
-        [Chem.MolFromSmarts(env1), Chem.MolFromSmarts(env2)],
-    ):
-        print(f"mol: {Chem.MolToSmiles(mol)}, env: {env}")
-        common_atoms = mol.GetSubstructMatch(env)
-        for atom in env.GetAtoms():
-            if atom.GetAtomMapNum() == 1:
-                atom_in_mol = mol.GetAtomWithIdx(common_atoms[atom.GetIdx()])
-                if atom_in_mol.GetAtomicNum() == 0:
-                    atom_in_mol.SetAtomMapNum(1)
-                    _mol1 = deepcopy(mol)
-
-            if atom.GetAtomMapNum() == 2:
-                atom_in_mol = mol.GetAtomWithIdx(common_atoms[atom.GetIdx()])
-                if atom_in_mol.GetAtomicNum() == 0:
-                    atom_in_mol.SetAtomMapNum(2)
-                    _mol2 = deepcopy(mol)
-
-    mol = Chem.CombineMols(_mol1, _mol2)
-    print(f"mol: {Chem.MolToSmiles(mol)}")
+    x = map_env_with_side_chain(
+        "*-C-O-C(=O)-[*:1].*1:c:c:c(-[*:3]):c:c:1.O-[*:2]",
+        "*C(=O)OCC.*O.*c1ccccc1"
+    )
+    print(x)
