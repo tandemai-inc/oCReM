@@ -166,6 +166,7 @@ def batch_insert_db(data, db_manager, radius):
             env_fragment_combo[(env, core_smi)] = {
                 "dist2": dist2,
                 "freq": 1,
+                "core_num_atoms": num_heavy_atoms,
             }
 
     db_manager.insert(list(envs), fragments, env_fragment_combo, radius)

@@ -31,18 +31,20 @@ class SqliteManager(DBManager):
             cursor.execute("""
                     CREATE TABLE IF NOT EXISTS env (
                         id INTEGER PRIMARY KEY,  
-                        name TEXT UNIQUE,
+                        name VARCHAR(512) UNIQUE,
                         radius INTEGER           
                     )
                 """)
 
+
             cursor.execute("""
                     CREATE TABLE IF NOT EXISTS fragment (
                         id INTEGER PRIMARY KEY,
-                        core_smi TEXT UNIQUE,
-                        core_num_atoms INTEGER  
+                        core_smi VARCHAR(512) UNIQUE,
+                        core_num_atoms INTEGER
                     )
                 """)
+
 
             cursor.execute("""
                     CREATE TABLE IF NOT EXISTS env_fragment (
@@ -50,11 +52,22 @@ class SqliteManager(DBManager):
                         fragment_id INTEGER,
                         dist2 INTEGER,
                         frequency INTEGER,
+                        core_num_atoms INTEGER,
                         PRIMARY KEY (env_id, fragment_id),
                         FOREIGN KEY (env_id) REFERENCES env(id) ON DELETE CASCADE,
                         FOREIGN KEY (fragment_id) REFERENCES fragment(id) ON DELETE CASCADE
                     )
                 """)
+
+            # create index
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_env_fragment_dist2_fid
+                ON env_fragment(env_id, core_num_atoms, dist2, fragment_id)
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_env_fragment_fid
+                ON env_fragment(env_id, core_num_atoms, fragment_id)
+            """)
 
             conn.commit()
         except sqlite3.Error as e:
@@ -149,12 +162,13 @@ class SqliteManager(DBManager):
                 fragment_ids[core_smi],
                 attr["dist2"],
                 attr["freq"],
+                attr["core_num_atoms"],
             )
             for (env, core_smi), attr in env_fragment_combo.items()
         ]
         upsert_sql = """
-            INSERT INTO env_fragment (env_id, fragment_id, dist2, frequency)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO env_fragment (env_id, fragment_id, dist2, frequency, core_num_atoms)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(env_id, fragment_id) DO UPDATE SET
             frequency = frequency + excluded.frequency
         """

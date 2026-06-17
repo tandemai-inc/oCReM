@@ -100,7 +100,7 @@ class PostGresManager(DBManager):
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS env (
                     id BIGSERIAL PRIMARY KEY,
-                    name TEXT UNIQUE NOT NULL,
+                    name VARCHAR(512) UNIQUE NOT NULL,
                     radius SMALLINT
                 )
             """)
@@ -109,7 +109,7 @@ class PostGresManager(DBManager):
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS fragment (
                     id BIGSERIAL PRIMARY KEY,
-                    core_smi TEXT UNIQUE NOT NULL,
+                    core_smi VARCHAR(512) UNIQUE NOT NULL,
                     core_num_atoms INTEGER
                 )
             """)
@@ -121,8 +121,19 @@ class PostGresManager(DBManager):
                     fragment_id BIGINT REFERENCES fragment(id),
                     dist2 SMALLINT,
                     frequency BIGINT,
+                    core_num_atoms INTEGER,
                     PRIMARY KEY (env_id, fragment_id)
                 )
+            """)
+
+            # create index
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_env_fragment_dist2_fid
+                ON env_fragment(env_id, core_num_atoms, dist2, fragment_id)
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_env_fragment_fid
+                ON env_fragment(env_id, core_num_atoms, fragment_id)
             """)
 
             conn.commit()
@@ -224,22 +235,22 @@ class PostGresManager(DBManager):
         buf = io.StringIO()
         for (env, core_smi), attr in env_fragment_combo.items():
             buf.write(
-                f"{env_ids[env]}\t{fragment_ids[core_smi]}\t{attr['dist2']}\t{attr['freq']}\n"
+                f"{env_ids[env]}\t{fragment_ids[core_smi]}\t{attr['dist2']}\t{attr['freq']}\t{attr['core_num_atoms']}\n"
             )
         buf.seek(0)
         self.cursor.execute(
-            "CREATE TEMP TABLE tmp_ef (env_id BIGINT, fragment_id BIGINT, dist2 SMALLINT, frequency BIGINT) ON COMMIT DROP"
+            "CREATE TEMP TABLE tmp_ef (env_id BIGINT, fragment_id BIGINT, dist2 SMALLINT, frequency BIGINT, core_num_atoms INTEGER) ON COMMIT DROP"
         )
         self.cursor.copy_from(
             buf,
             "tmp_ef",
-            columns=("env_id", "fragment_id", "dist2", "frequency"),
+            columns=("env_id", "fragment_id", "dist2", "frequency", "core_num_atoms"),
             sep="\t",
         )
         # upsert in batch
         self.cursor.execute("""
-            INSERT INTO env_fragment (env_id, fragment_id, dist2, frequency)
-            SELECT env_id, fragment_id, dist2, frequency FROM tmp_ef
+            INSERT INTO env_fragment (env_id, fragment_id, dist2, frequency, core_num_atoms)
+            SELECT env_id, fragment_id, dist2, frequency, core_num_atoms FROM tmp_ef
             ON CONFLICT (env_id, fragment_id) DO UPDATE SET
             frequency = env_fragment.frequency + EXCLUDED.frequency
         """)
