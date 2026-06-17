@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 
+import multiprocessing
 import random
 import re
 from copy import deepcopy
@@ -9,10 +10,9 @@ from multiprocessing import Pool, cpu_count
 
 from rdkit import Chem
 
-from ta_gen.crem_utils.mol_context import combine_core_env_to_rxn_smarts
 from ta_gen.utils.fragment_utils import fragment_mol, fragment_mol_link
-import multiprocessing
-multiprocessing.set_start_method('fork')
+
+multiprocessing.set_start_method("fork")
 
 
 def update_protected_ids(mol, protected_ids, replace_ids):
@@ -46,7 +46,10 @@ def zip_new_replacement(new_replacement, input_structure):
         Chem.SanitizeMol(
             final_mol, catchErrors=True
         )  # Bonds can be restored to the aromatic bond type
-        smi = Chem.MolToSmiles(final_mol, isomericSmiles=True)
+        # smi = Chem.MolToSmiles(final_mol, isomericSmiles=True)
+        smi = Chem.MolToSmiles(
+            Chem.RemoveHs(final_mol), isomericSmiles=True, canonical=True
+        )
         return smi, new_replacement
     except Exception:
         return None, None
@@ -92,6 +95,8 @@ def get_core_smi_replacements(
     results = __get_replacements(
         db_manager, env, dist, min_atoms, max_atoms, radius, min_freq, **kwargs
     )
+    # remove core_smi from results
+    results.discard((core_smi,))
 
     if max_replacements is not None:
         n = min(len(results), max_replacements)
@@ -100,8 +105,7 @@ def get_core_smi_replacements(
         selected_results = list(results)
 
     for new_core_smi in selected_results:
-        if new_core_smi != core_smi:
-            yield new_core_smi
+        yield new_core_smi
 
 
 def gen_new_replacements(  # noqa: C901
@@ -222,38 +226,136 @@ def mutate_mol_for_grow(
 
 
 def remove_atoms_and_keep_attachments(mol, atoms_to_remove):
-    emol = Chem.EditableMol(mol)
+    remove_set = set(atoms_to_remove)
 
-    # Store bond information for attachment points
-    bonds_to_break = []
-    for atom_idx in atoms_to_remove:
-        atom = mol.GetAtomWithIdx(atom_idx)
-        for neighbor in atom.GetNeighbors():
-            neighbor_idx = neighbor.GetIdx()
-            if neighbor_idx not in atoms_to_remove:
-                # This is a bond connecting the "keep part" and "remove part"
-                bonds_to_break.append((neighbor_idx, atom_idx))
+    # 1. find bonds to cut
+    bonds_to_cut = []
+    for bond in mol.GetBonds():
+        idx1 = bond.GetBeginAtomIdx()
+        idx2 = bond.GetEndAtomIdx()
+        if (idx1 in remove_set) != (idx2 in remove_set):
+            bonds_to_cut.append(bond.GetIdx())
 
-    # 3. Use RDKit's special functions to break bonds and add Dummy Atoms (*)
-    # ReplaceCore logic is complex, here we manually break bonds for precision
-    # We iterate through the boundary bonds found earlier, break them and add *
+    # 2. cut bond and add *
+    if bonds_to_cut:
+        fragmented_mol = Chem.FragmentOnBonds(
+            mol, bonds_to_cut, dummyLabels=[(0, 0)] * len(bonds_to_cut)
+        )
+    else:
+        fragmented_mol = mol
 
-    fragmented_mol = Chem.RWMol(mol)
-    for neighbor_idx, to_remove_idx in bonds_to_break:
-        # Add a dummy atom (*)
-        dummy_idx = fragmented_mol.AddAtom(Chem.Atom(0))
-        # Create chemical bond between the retained atom and the dummy atom
-        bond = mol.GetBondBetweenAtoms(neighbor_idx, to_remove_idx)
-        fragmented_mol.AddBond(neighbor_idx, dummy_idx, bond.GetBondType())
+    # 3. remove atoms in reverse order
+    editable_mol = Chem.RWMol(fragmented_mol)
+    for idx in sorted(list(remove_set), reverse=True):
+        editable_mol.RemoveAtom(idx)
 
-    # 4. Finally remove all target atoms
-    # Must remove from largest index to smallest, otherwise indices will be messed up
-    for idx in sorted(atoms_to_remove, reverse=True):
-        fragmented_mol.RemoveAtom(idx)
+    result_mol = editable_mol.GetMol()
+    Chem.SanitizeMol(result_mol)
 
-    # 5. Convert to SMILES (result may contain multiple fragments)
-    result_smiles = Chem.MolToSmiles(fragmented_mol.GetMol())
-    return result_smiles
+    # 4. split molecule into frags
+    frags = Chem.GetMolFrags(result_mol, asMols=True)
+
+    # 5. filter frags with *
+    valid_frags = []
+    for frag in frags:
+        # check if fragment is dummy only, if not, it is a valid fragment
+        is_dummy_only = all(atom.GetAtomicNum() == 0 for atom in frag.GetAtoms())
+
+        if not is_dummy_only:
+            valid_frags.append(frag)
+
+    if not valid_frags:
+        return ""
+
+    # 6. combine valid frags into a single SMILES string
+    combined_smiles = ".".join([Chem.MolToSmiles(f) for f in valid_frags])
+
+    return combined_smiles
+
+
+def __check_potential_match(env, side_chain, possible_match):
+    for env_id, side_chain_id in enumerate(possible_match):
+        env_atom = env.GetAtomWithIdx(env_id)
+        side_chain_atom = side_chain.GetAtomWithIdx(side_chain_id)
+        if env_atom.GetAtomMapNum() > 0 and side_chain_atom.GetAtomicNum() != 0:
+            return False
+
+    return True
+
+
+def __get_potential_macthes(side_chain, env_info):
+    matches = set()
+    for env_id, _env_info in env_info.items():
+        env = _env_info["mol"]
+        all_matches = side_chain.GetSubstructMatches(env, uniquify=False)
+        for possible_match in all_matches:
+            if __check_potential_match(env, side_chain, possible_match):
+                matches.add(env_id)
+                break
+
+    return matches
+
+
+def map_env_with_side_chain(env_smarts, side_chain_smi):
+    # parse envs
+    env_smarts_list = env_smarts.split(".")
+    env_info = {}
+    for env_smart in env_smarts_list:
+        match = re.search(r"\[\*:(\d+)\]", env_smart)
+        if match:
+            env_id = int(match.group(1))
+            env_info[env_id] = {
+                "mol": Chem.MolFromSmarts(env_smart),
+                "smart": env_smart,
+            }
+
+    # parse side chain
+    side_chain_smi_list = side_chain_smi.split(".")
+
+    # search potential matched envs for each chain
+    side_chain_matched_envs = []
+    for side_chain_smi in side_chain_smi_list:
+        side_chain = Chem.MolFromSmiles(side_chain_smi)
+        matched_envs = __get_potential_macthes(side_chain, env_info)
+        side_chain_matched_envs.append([side_chain_smi, matched_envs])
+
+    side_chain_matched_envs = sorted(side_chain_matched_envs, key=lambda x: len(x[1]))
+    final_matches = []
+    while side_chain_matched_envs:
+        cur_side_chain_info = side_chain_matched_envs[0]
+        side_chain_smi, cur_matched_envs = cur_side_chain_info
+        if cur_matched_envs:
+            matched_env_id = cur_matched_envs.pop()
+            final_matches.append(([side_chain_smi, matched_env_id]))
+            # update side_chain_matched_envs
+            side_chain_matched_envs = side_chain_matched_envs[1:]
+            for ele in side_chain_matched_envs:
+                ele[1].discard(matched_env_id)
+            side_chain_matched_envs = sorted(
+                side_chain_matched_envs, key=lambda x: len(x[1])
+            )
+        else:
+            final_matches.append(([side_chain_smi, None]))
+            # update side_chain_matched_envs
+            side_chain_matched_envs = side_chain_matched_envs[1:]
+
+    # fill None
+    used_env_ids = set([_[1] for _ in final_matches if _[1]])
+    unused_ids = set(range(1, len(env_smarts_list) + 1)) - used_env_ids
+    for ele in final_matches:
+        if ele[1] is None:
+            ele[1] = unused_ids.pop()
+
+    # update side chain
+    side_chains = []
+    for side_chain_smi, env_id in final_matches:
+        mol = Chem.MolFromSmiles(side_chain_smi)
+        for atom in mol.GetAtoms():
+            if atom.GetAtomicNum() == 0:
+                atom.SetAtomMapNum(env_id)
+        side_chains.append(Chem.MolToSmiles(mol))
+
+    return ".".join(side_chains)
 
 
 def mutate_mol(
@@ -286,60 +388,13 @@ def mutate_mol(
     for env_smarts, core_smi, atom_ids in f:
         if core_smi.count("*") == 1:
             side_chain_smi = remove_atoms_and_keep_attachments(mol, atom_ids)
-            # replaced_string = re.sub(r"\*", r"\[*:1\]", side_chain_smi)  # [1*] -> [*:1]
             side_chain = Chem.MolFromSmiles(side_chain_smi)
             for atom in side_chain.GetAtoms():
                 if atom.GetAtomicNum() == 0:
                     atom.SetAtomMapNum(1)
         else:
-            smarts = combine_core_env_to_rxn_smarts(core_smi, env_smarts, keep_h=False)
-            smarts_mol = Chem.MolFromSmarts(smarts)
-            total_match = mol.GetSubstructMatch(smarts_mol)
-            core_mol = Chem.MolFromSmarts(core_smi)
-            dummy_idx_bond_idx_map = {}
-            for atom in core_mol.GetAtoms():
-                if atom.GetAtomicNum() == 0:
-                    neighbor = atom.GetNeighbors()
-                    dummy_idx_bond_idx_map[atom.GetAtomMapNum()] = [
-                        atom.GetIdx(),
-                        neighbor[0].GetIdx(),
-                    ]
-
-            core_matches = mol.GetSubstructMatches(core_mol)
-
-            frag_mol = None
-
-            for core_match in core_matches:
-                if set(core_match).issubset(set(total_match)):
-                    cut_bonds = []
-                    labels = []
-                    for k, v in dummy_idx_bond_idx_map.items():
-                        cut_bonds.append(
-                            mol.GetBondBetweenAtoms(
-                                core_match[v[0]], core_match[v[1]]
-                            ).GetIdx()
-                        )
-                        labels.append((k, k))
-                    frag_mol = Chem.FragmentOnBonds(
-                        mol, cut_bonds, addDummies=True, dummyLabels=labels
-                    )
-                    break
-
-            if not frag_mol:
-                continue
-
-            frag_smi = Chem.MolToSmiles(frag_mol)
-
-            frag_smi_list = frag_smi.split(".")
-
-            side_chain_smi_list = []
-
-            for s in frag_smi_list:
-                if s.count("*") == 1:
-                    replaced_string = re.sub(r"(\d+)\*", r"*:\1", s)  # [1*] -> [*:1]
-                    side_chain_smi_list.append(replaced_string)
-
-            side_chain_smi = ".".join(side_chain_smi_list)
+            side_chain_smi = remove_atoms_and_keep_attachments(mol, atom_ids)
+            side_chain_smi = map_env_with_side_chain(env_smarts, side_chain_smi)
             side_chain = Chem.MolFromSmiles(side_chain_smi)
 
         if not side_chain_smi:
@@ -410,15 +465,15 @@ def grow_mol(
     )
 
 
-def mark_wildcard_by_env(mol, env, map_num):
-    matches = mol.GetSubstructMatches(env)
+def mark_wildcard_by_env(mol, env):
+    matches = mol.GetSubstructMatches(env, uniquify=False)
     if not matches:
         return False
 
     wildcard_indices_in_env = [
         a.GetIdx()
         for a in env.GetAtoms()
-        if (a.GetAtomicNum() == 0) & (a.GetAtomMapNum() == 1)
+        if (a.GetAtomicNum() == 0) & (a.GetAtomMapNum() != 0)
     ]
 
     for match in matches:
@@ -426,8 +481,8 @@ def mark_wildcard_by_env(mol, env, map_num):
             mol_atom_idx = match[env_idx]
             atom = mol.GetAtomWithIdx(mol_atom_idx)
             if atom.GetAtomicNum() == 0:
-                atom.SetAtomMapNum(map_num)
-    return True
+                return True
+    return False
 
 
 def combine_link_mols(side_chain_1, side_chain_2, env_smarts):
@@ -435,16 +490,24 @@ def combine_link_mols(side_chain_1, side_chain_2, env_smarts):
     mol2 = Chem.MolFromSmiles(Chem.MolToSmiles(side_chain_2))
 
     env1, env2 = env_smarts.split(".")
+    for env in env_smarts.split("."):
+        if "*:1" in env:
+            env1 = env
+        elif "*:2" in env:
+            env2 = env
+
     env1 = Chem.MolFromSmarts(env1)
     env2 = Chem.MolFromSmarts(env2)
 
-    if mark_wildcard_by_env(mol1, env1, 1):
+    mol1_in_env_1 = mark_wildcard_by_env(mol1, env1)
+    mol2_in_env_2 = mark_wildcard_by_env(mol2, env2)
+    if mol1_in_env_1 and mol2_in_env_2:
         for atom in mol2.GetAtoms():
             if atom.GetAtomicNum() == 0:
                 atom.SetAtomMapNum(2)
 
         combined = Chem.CombineMols(mol1, mol2)
-    elif mark_wildcard_by_env(mol2, env1, 2):
+    else:
         for atom in mol1.GetAtoms():
             if atom.GetAtomicNum() == 0:
                 atom.SetAtomMapNum(2)
@@ -552,37 +615,6 @@ def link_mols(
             max_size=0,
         )
 
-
 if __name__ == "__main__":
-
-    mol1 = "CCOc1cc([*:1])ccc1C(=O)O"
-    mol2 = "c1cc([*:2])ccn1"
-
-    env1 = "c(:c(:*)[*:1])"
-    env2 = "c(:c(:*)[*:2])"
-
-    from itertools import product
-
-    _mol1 = None
-    _mol2 = None
-    for mol, env in product(
-        [Chem.MolFromSmiles(mol1), Chem.MolFromSmiles(mol2)],
-        [Chem.MolFromSmarts(env1), Chem.MolFromSmarts(env2)],
-    ):
-        print(f"mol: {Chem.MolToSmiles(mol)}, env: {env}")
-        common_atoms = mol.GetSubstructMatch(env)
-        for atom in env.GetAtoms():
-            if atom.GetAtomMapNum() == 1:
-                atom_in_mol = mol.GetAtomWithIdx(common_atoms[atom.GetIdx()])
-                if atom_in_mol.GetAtomicNum() == 0:
-                    atom_in_mol.SetAtomMapNum(1)
-                    _mol1 = deepcopy(mol)
-
-            if atom.GetAtomMapNum() == 2:
-                atom_in_mol = mol.GetAtomWithIdx(common_atoms[atom.GetIdx()])
-                if atom_in_mol.GetAtomicNum() == 0:
-                    atom_in_mol.SetAtomMapNum(2)
-                    _mol2 = deepcopy(mol)
-
-    mol = Chem.CombineMols(_mol1, _mol2)
-    print(f"mol: {Chem.MolToSmiles(mol)}")
+    res = map_env_with_side_chain("*-C-O-C(=O)-[*:2].C-[*:1]", "*C(=O)OCC.*C")
+    print(f"res: {res}")
