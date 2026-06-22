@@ -296,6 +296,54 @@ def __get_potential_macthes(side_chain, env_info):
     return matches
 
 
+def __get_side_chain_and_env_combinations(side_chain_matched_envs, side_chain_smi_list):
+    num_side_chains = len(side_chain_smi_list)
+    results = [[] for _ in range(num_side_chains + 1)]
+    # level 0, start from an empty env id list
+    results[0].append([None])
+
+    for i, side_chain_smi in enumerate(side_chain_smi_list):
+        last_combinations = results[i]
+        cur_combinations = []
+        # candidate envs for current side chain
+        matched_envs = side_chain_matched_envs.get(side_chain_smi, set())
+
+        for last_combination in last_combinations:
+            # match nothing
+            _cur_combination = deepcopy(last_combination)
+            _cur_combination.append(None)
+            cur_combinations.append(_cur_combination)
+            # match with candidate envs
+            for matched_env_id in matched_envs:
+                if matched_env_id in last_combination:
+                    # env is already matched with other side chain
+                    continue
+
+                _last_combination = deepcopy(last_combination)
+                _last_combination.append(matched_env_id)
+                cur_combinations.append(_last_combination)
+        results[i + 1] = cur_combinations
+
+    # results with longtest match
+    lengths = [sum(1 for env_id in combination if env_id is not None) for combination in
+               results[-1]]
+    longest_match = max(lengths)
+    longest_match_combinations = [combination[1:] for combination in results[-1] if sum(
+        1 for env_id in combination if env_id is not None) == longest_match]
+
+    matched_combinations = []
+    env_ids = range(1, len(side_chain_smi_list) + 1)
+    for combination in longest_match_combinations:
+        # fill None
+        used_env_ids = set([env_id for env_id in combination if env_id is not None])
+        unused_env_ids = set(env_ids) - used_env_ids
+        filled_combination = [env_id if env_id is not None else unused_env_ids.pop() for env_id in
+                              combination]
+        matched_combinations.append(filled_combination)
+
+    return matched_combinations
+
+
 def map_env_with_side_chain(env_smarts, side_chain_smi):
     # parse envs
     env_smarts_list = env_smarts.split(".")
@@ -313,49 +361,30 @@ def map_env_with_side_chain(env_smarts, side_chain_smi):
     side_chain_smi_list = side_chain_smi.split(".")
 
     # search potential matched envs for each chain
-    side_chain_matched_envs = []
+    side_chain_matched_envs = {}
     for side_chain_smi in side_chain_smi_list:
         side_chain = Chem.MolFromSmiles(side_chain_smi)
         matched_envs = __get_potential_macthes(side_chain, env_info)
-        side_chain_matched_envs.append([side_chain_smi, matched_envs])
+        side_chain_matched_envs[side_chain_smi] = matched_envs
 
-    side_chain_matched_envs = sorted(side_chain_matched_envs, key=lambda x: len(x[1]))
-    final_matches = []
-    while side_chain_matched_envs:
-        cur_side_chain_info = side_chain_matched_envs[0]
-        side_chain_smi, cur_matched_envs = cur_side_chain_info
-        if cur_matched_envs:
-            matched_env_id = cur_matched_envs.pop()
-            final_matches.append(([side_chain_smi, matched_env_id]))
-            # update side_chain_matched_envs
-            side_chain_matched_envs = side_chain_matched_envs[1:]
-            for ele in side_chain_matched_envs:
-                ele[1].discard(matched_env_id)
-            side_chain_matched_envs = sorted(
-                side_chain_matched_envs, key=lambda x: len(x[1])
-            )
-        else:
-            final_matches.append(([side_chain_smi, None]))
-            # update side_chain_matched_envs
-            side_chain_matched_envs = side_chain_matched_envs[1:]
+    # match side chain with env based on potential matched envs
+    matched_combinations = __get_side_chain_and_env_combinations(side_chain_matched_envs,
+                                                                 side_chain_smi_list)
 
-    # fill None
-    used_env_ids = set([_[1] for _ in final_matches if _[1]])
-    unused_ids = set(range(1, len(env_smarts_list) + 1)) - used_env_ids
-    for ele in final_matches:
-        if ele[1] is None:
-            ele[1] = unused_ids.pop()
-
-    # update side chain
+    # get side chain with env mapped
     side_chains = []
-    for side_chain_smi, env_id in final_matches:
-        mol = Chem.MolFromSmiles(side_chain_smi)
-        for atom in mol.GetAtoms():
-            if atom.GetAtomicNum() == 0:
-                atom.SetAtomMapNum(env_id)
-        side_chains.append(Chem.MolToSmiles(mol))
+    for combination in matched_combinations:
+        side_chain_smiles = []
+        for side_chain_smi, env_id in zip(side_chain_smi_list, combination):
+            mol = Chem.MolFromSmiles(side_chain_smi)
+            if env_id is not None:
+                for atom in mol.GetAtoms():
+                    if atom.GetAtomicNum() == 0:
+                        atom.SetAtomMapNum(env_id)
+            side_chain_smiles.append(Chem.MolToSmiles(mol))
+        side_chains.append(Chem.MolFromSmiles(".".join(side_chain_smiles)))
 
-    return ".".join(side_chains)
+    return side_chains
 
 
 def mutate_mol(
@@ -386,38 +415,40 @@ def mutate_mol(
 
     mol_hac = mol.GetNumHeavyAtoms()
     for env_smarts, core_smi, atom_ids in f:
+        side_chain_smi = remove_atoms_and_keep_attachments(mol, atom_ids)
+        if not side_chain_smi:
+            continue
+
         if core_smi.count("*") == 1:
             side_chain_smi = remove_atoms_and_keep_attachments(mol, atom_ids)
             side_chain = Chem.MolFromSmiles(side_chain_smi)
             for atom in side_chain.GetAtoms():
                 if atom.GetAtomicNum() == 0:
                     atom.SetAtomMapNum(1)
+            side_chains = [side_chain]
         else:
             side_chain_smi = remove_atoms_and_keep_attachments(mol, atom_ids)
-            side_chain_smi = map_env_with_side_chain(env_smarts, side_chain_smi)
-            side_chain = Chem.MolFromSmiles(side_chain_smi)
+            side_chains = map_env_with_side_chain(env_smarts, side_chain_smi)
 
-        if not side_chain_smi:
-            continue
-
-        yield from gen_new_replacements(
-            [(env_smarts, core_smi, atom_ids)],
-            side_chain,
-            mol_hac,
-            db_manager,
-            min_inc,
-            max_inc,
-            max_replacements,
-            num_cpus,
-            radius=radius,
-            dist=dist,
-            min_freq=min_freq,
-            min_size=min_size,
-            max_size=max_size,
-            min_rel_size=min_rel_size,
-            max_rel_size=max_rel_size,
-            products=products,
-        )
+        for side_chain in side_chains:
+            yield from gen_new_replacements(
+                [(env_smarts, core_smi, atom_ids)],
+                side_chain,
+                mol_hac,
+                db_manager,
+                min_inc,
+                max_inc,
+                max_replacements,
+                num_cpus,
+                radius=radius,
+                dist=dist,
+                min_freq=min_freq,
+                min_size=min_size,
+                max_size=max_size,
+                min_rel_size=min_rel_size,
+                max_rel_size=max_rel_size,
+                products=products,
+            )
 
 
 def grow_mol(
